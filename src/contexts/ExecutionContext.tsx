@@ -43,6 +43,7 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
   const [timerState, setTimerState] = useState<TimerState | null>(null)
   const [declined, setDeclined] = useState('')
   const [date, setDate] = useState(todayString)
+  const [loaded, setLoaded] = useState(false)
 
   // 日付チェック（日をまたいだらリセット）
   useEffect(() => {
@@ -54,6 +55,7 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
         setItemWeights({})
         setTimerState(null)
         setDeclined('')
+        setLoaded(false)
       }
     }, 30_000)
     return () => clearInterval(interval)
@@ -62,6 +64,7 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
   // ルーティン切替時にロード
   useEffect(() => {
     if (!selected) return
+    setLoaded(false)
     const key = executionKey(selected.id, date)
     storage.getExecution(key).then((saved) => {
       if (saved) {
@@ -75,12 +78,13 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
         setTimerState(null)
         setDeclined('')
       }
+      setLoaded(true)
     })
   }, [selected?.id, date])
 
-  // 保存
+  // 保存（ロード完了後のみ）
   useEffect(() => {
-    if (!selected) return
+    if (!selected || !loaded) return
     const key = executionKey(selected.id, date)
     const state: ExecutionState = {
       routineId: selected.id,
@@ -91,7 +95,7 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
       declined,
     }
     storage.saveExecution(key, state)
-  }, [checkedItems, itemWeights, timerState, declined, selected?.id, date])
+  }, [checkedItems, itemWeights, timerState, declined, selected?.id, date, loaded])
 
   // タイマーカウントダウン
   useEffect(() => {

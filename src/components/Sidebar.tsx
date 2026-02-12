@@ -60,7 +60,7 @@ export function Sidebar() {
                 onChange={e => setEditName(e.target.value)}
                 onBlur={() => handleRename(r.id)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') handleRename(r.id)
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleRename(r.id)
                   if (e.key === 'Escape') setEditingId(null)
                 }}
                 className="flex-1 bg-transparent outline-none border-b border-wabi-accent text-sm"
@@ -94,7 +94,7 @@ export function Sidebar() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter') handleAdd()
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAdd()
               if (e.key === 'Escape') { setAdding(false); setNewName('') }
             }}
             onBlur={() => { if (!newName.trim()) setAdding(false) }}

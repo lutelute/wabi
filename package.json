@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
-    "build:mac": "tsc && vite build && electron-builder --mac"
+    "build:mac": "tsc && vite build && electron-builder --mac",
+    "install:mac": "npm run build:mac && cp -R release/*/mac-arm64/wabi.app /Applications/ && echo '✓ /Applications/wabi.app にインストール完了'"
   },
   "keywords": [],
   "author": "",

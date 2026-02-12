@@ -4,7 +4,7 @@ import { useRoutines } from '../contexts/RoutineContext'
 export function RoutineEditor() {
   const { selected, updateRoutineText } = useRoutines()
   const [text, setText] = useState('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     if (selected) {

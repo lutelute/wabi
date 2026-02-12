@@ -16,6 +16,7 @@ mac:
     - zip
   icon: build/icon.icns
   category: public.app-category.productivity
+  identity: null
 
 win:
   target:

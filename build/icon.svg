@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- E3: 大石・ゴツゴツ感最大・波紋7本・迫力重視 -->
+  <defs>
+    <radialGradient id="bg3" cx="46%" cy="44%" r="70%">
+      <stop offset="0%" stop-color="#faf8f5"/>
+      <stop offset="100%" stop-color="#ebe3d8"/>
+    </radialGradient>
+    <radialGradient id="s3a" cx="28%" cy="20%" r="72%">
+      <stop offset="0%" stop-color="#8e8680"/>
+      <stop offset="100%" stop-color="#3c3630"/>
+    </radialGradient>
+    <radialGradient id="s3b" cx="30%" cy="24%" r="68%">
+      <stop offset="0%" stop-color="#9a928a"/>
+      <stop offset="100%" stop-color="#484038"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg3)"/>
+
+  <!-- 波紋7本 -->
+  <ellipse cx="430" cy="455" rx="430" ry="390" fill="none" stroke="#ccc0ae" stroke-width="4.5" opacity="0.3"/>
+  <ellipse cx="430" cy="455" rx="375" ry="340" fill="none" stroke="#c8bca8" stroke-width="5" opacity="0.36"/>
+  <ellipse cx="430" cy="455" rx="322" ry="292" fill="none" stroke="#c4b5a0" stroke-width="5.5" opacity="0.42"/>
+  <ellipse cx="430" cy="455" rx="272" ry="246" fill="none" stroke="#bfb09a" stroke-width="6" opacity="0.5"/>
+  <ellipse cx="430" cy="455" rx="224" ry="203" fill="none" stroke="#baab94" stroke-width="6.5" opacity="0.57"/>
+  <ellipse cx="430" cy="455" rx="180" ry="163" fill="none" stroke="#b5a68e" stroke-width="7" opacity="0.65"/>
+  <ellipse cx="430" cy="455" rx="140" ry="126" fill="none" stroke="#b0a088" stroke-width="7.5" opacity="0.73"/>
+
+  <!-- 主石（ゴツゴツの大岩） -->
+  <g transform="translate(408, 430)">
+    <path d="M-20,-60 C10,-70 58,-58 78,-35 C92,-16 88,18 76,42 C62,62 30,72 0,68 C-30,64 -60,48 -72,24 C-84,0 -78,-25 -62,-44 C-50,-56 -35,-58 -20,-60Z"
+          fill="#3a3430" opacity="0.1" transform="translate(8,12)"/>
+    <path d="M-20,-60 C10,-70 58,-58 78,-35 C92,-16 88,18 76,42 C62,62 30,72 0,68 C-30,64 -60,48 -72,24 C-84,0 -78,-25 -62,-44 C-50,-56 -35,-58 -20,-60Z"
+          fill="url(#s3a)"/>
+    <!-- 岩のディテール線 -->
+    <path d="M-15,-42 C5,-48 35,-40 48,-28" fill="none" stroke="#7a726a" stroke-width="1.5" opacity="0.2"/>
+    <path d="M-50,10 C-30,2 -5,0 20,4" fill="none" stroke="#6a625a" stroke-width="1" opacity="0.15"/>
+    <!-- ハイライト -->
+    <path d="M-14,-44 C8,-50 38,-42 46,-28 C30,-36 5,-38 -16,-30Z"
+          fill="#b8b0a6" opacity="0.3"/>
+  </g>
+
+  <!-- 副石（ゴツい中石） -->
+  <g transform="translate(585, 540)">
+    <path d="M-10,-40 C16,-46 46,-36 55,-18 C62,0 54,26 38,38 C24,48 -4,46 -22,36 C-38,26 -48,8 -44,-12 C-40,-30 -28,-36 -10,-40Z"
+          fill="#3a3430" opacity="0.1" transform="translate(5,8)"/>
+    <path d="M-10,-40 C16,-46 46,-36 55,-18 C62,0 54,26 38,38 C24,48 -4,46 -22,36 C-38,26 -48,8 -44,-12 C-40,-30 -28,-36 -10,-40Z"
+          fill="url(#s3b)"/>
+    <path d="M-6,-26 C10,-30 28,-24 32,-14 C20,-20 4,-22 -10,-16Z"
+          fill="#b0a89e" opacity="0.25"/>
+  </g>
+</svg>

@@ -1,0 +1,29 @@
+appId: com.wabi.app
+productName: wabi
+copyright: Copyright © 2026
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+
+mac:
+  target:
+    - dmg
+    - zip
+  icon: build/icon.icns
+  category: public.app-category.productivity
+
+win:
+  target:
+    - nsis
+    - portable
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility

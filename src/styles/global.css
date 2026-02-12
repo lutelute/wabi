@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --color-wabi-bg: #faf8f5;
+  --color-wabi-surface: #f5f0eb;
+  --color-wabi-border: #e8e0d8;
+  --color-wabi-text: #2d2a26;
+  --color-wabi-text-muted: #8a8480;
+  --color-wabi-accent: #c4a882;
+  --color-wabi-check: #7a9e7e;
+  --color-wabi-timer: #b07a5b;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  background-color: var(--color-wabi-bg);
+  color: var(--color-wabi-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* macOS titlebar drag region */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}

@@ -25,7 +25,16 @@ export default defineConfig({
       },
     ]),
     renderer(),
+    // file:// プロトコルでcrossoriginが動かない問題の対策
+    {
+      name: 'remove-crossorigin',
+      enforce: 'post' as const,
+      transformIndexHtml(html: string) {
+        return html.replace(/ crossorigin/g, '')
+      },
+    },
   ],
+  base: './',
   build: {
     outDir: 'dist',
   },

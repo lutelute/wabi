@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, Notification } from 'electron'
 import path from 'path'
 import Store from 'electron-store'
 import type { Routine, ExecutionState } from '../src/types/routine'
@@ -70,7 +70,70 @@ ipcMain.handle('notification:show', (_event, title: string, body: string) => {
   return true
 })
 
-app.whenReady().then(createWindow)
+function buildMenu() {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about', label: `${app.name} について` },
+        { type: 'separator' },
+        {
+          label: '設定…',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => mainWindow?.webContents.send('open-settings'),
+        },
+        { type: 'separator' },
+        { role: 'hide', label: `${app.name} を隠す` },
+        { role: 'hideOthers', label: 'ほかを隠す' },
+        { role: 'unhide', label: 'すべてを表示' },
+        { type: 'separator' },
+        { role: 'quit', label: `${app.name} を終了` },
+      ],
+    },
+    {
+      label: '編集',
+      submenu: [
+        { role: 'undo', label: '取り消す' },
+        { role: 'redo', label: 'やり直す' },
+        { type: 'separator' },
+        { role: 'cut', label: 'カット' },
+        { role: 'copy', label: 'コピー' },
+        { role: 'paste', label: 'ペースト' },
+        { role: 'selectAll', label: 'すべてを選択' },
+      ],
+    },
+    {
+      label: 'ウインドウ',
+      submenu: [
+        { role: 'minimize', label: '最小化' },
+        { role: 'zoom', label: 'ズーム' },
+        { role: 'close', label: '閉じる' },
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+// Settings store
+ipcMain.handle('settings:get', () => {
+  return store.get('settings' as any) ?? {}
+})
+
+ipcMain.handle('settings:save', (_event, settings: Record<string, unknown>) => {
+  store.set('settings' as any, settings)
+  return true
+})
+
+// Clear execution data
+ipcMain.handle('store:clearExecutions', () => {
+  store.set('executions', {})
+  return true
+})
+
+app.whenReady().then(() => {
+  buildMenu()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

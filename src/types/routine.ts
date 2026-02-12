@@ -38,12 +38,28 @@ export interface ExecutionState {
   declined: string          // 今日やらないと決めたこと（自由記述）
 }
 
+export interface AppSettings {
+  timerNotification: boolean
+  defaultWeight: number
+  particleCount: 'low' | 'normal' | 'high'
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  timerNotification: true,
+  defaultWeight: 1,
+  particleCount: 'normal',
+}
+
 export interface ElectronAPI {
   getRoutines: () => Promise<Routine[]>
   saveRoutines: (routines: Routine[]) => Promise<boolean>
   getExecution: (key: string) => Promise<ExecutionState | null>
   saveExecution: (key: string, state: ExecutionState) => Promise<boolean>
+  clearExecutions: () => Promise<boolean>
+  getSettings: () => Promise<Partial<AppSettings>>
+  saveSettings: (settings: AppSettings) => Promise<boolean>
   showNotification: (title: string, body: string) => Promise<boolean>
+  onOpenSettings: (callback: () => void) => () => void
 }
 
 declare global {

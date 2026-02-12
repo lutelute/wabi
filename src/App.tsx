@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RoutineProvider } from './contexts/RoutineContext'
 import { ExecutionProvider } from './contexts/ExecutionContext'
 import { Sidebar } from './components/Sidebar'
@@ -9,11 +9,18 @@ import { NowFocus } from './components/NowFocus'
 import { EnergyGauge } from './components/EnergyGauge'
 import { KaresansuiStones } from './components/KaresansuiStones'
 import { DeclinedInput } from './components/DeclinedInput'
+import { Settings } from './components/Settings'
+import { storage } from './storage'
 
 export type AppMode = 'edit' | 'execute'
 
 export default function App() {
   const [mode, setMode] = useState<AppMode>('execute')
+  const [showSettings, setShowSettings] = useState(false)
+
+  useEffect(() => {
+    return storage.onOpenSettings(() => setShowSettings(true))
+  }, [])
 
   return (
     <RoutineProvider>
@@ -49,6 +56,9 @@ export default function App() {
             </div>
           </main>
         </div>
+
+        {/* Settings overlay */}
+        {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       </ExecutionProvider>
     </RoutineProvider>
   )

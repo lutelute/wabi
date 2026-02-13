@@ -1,6 +1,6 @@
 {
   "name": "wabi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "侘び - ルーティン管理アプリ",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "electron-updater": "^6.6.2",
     "nanoid": "^5.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"

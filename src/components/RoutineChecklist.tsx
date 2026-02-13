@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useRoutines } from '../contexts/RoutineContext'
 import { useExecution } from '../contexts/ExecutionContext'
+import { useSettings } from '../contexts/SettingsContext'
 
 export function RoutineChecklist() {
   const { selected } = useRoutines()
   const { checkedItems, toggleCheck, getWeight, updateWeight } = useExecution()
+  const { settings } = useSettings()
   const [expanded, setExpanded] = useState(false)
+  const weightMax = settings.weightMax || 5
 
   if (!selected || selected.phases.length === 0) return null
 
@@ -91,7 +94,7 @@ export function RoutineChecklist() {
                         <input
                           type="range"
                           min={1}
-                          max={5}
+                          max={weightMax}
                           value={w}
                           onChange={e => updateWeight(item.title, Number(e.target.value))}
                           className="w-14 h-1 accent-wabi-accent cursor-pointer"

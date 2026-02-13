@@ -11,6 +11,12 @@ function executionKey(routineId: string, date: string): string {
   return `${routineId}:${date}`
 }
 
+/** NaN/Infinity/負数を安全に除去するヘルパー */
+function safeWeight(value: unknown, fallback: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 1 ? n : fallback
+}
+
 export interface EnergyProgress {
   energy: number      // 獲得エネルギー (重み付き)
   capacity: number    // 最大キャパシティ (全重みの合計)
@@ -119,11 +125,11 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateWeight = useCallback((itemTitle: string, weight: number) => {
-    setItemWeights(prev => ({ ...prev, [itemTitle]: weight }))
+    setItemWeights(prev => ({ ...prev, [itemTitle]: safeWeight(weight, 1) }))
   }, [])
 
   const getWeight = useCallback((itemTitle: string, defaultWeight: number) => {
-    return itemWeights[itemTitle] ?? defaultWeight
+    return safeWeight(itemWeights[itemTitle], defaultWeight)
   }, [itemWeights])
 
   const startTimer = useCallback((itemId: string, durationMin: number) => {
@@ -142,21 +148,22 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
   const progress: EnergyProgress = useMemo(() => {
     const allItems = selected?.phases.flatMap(p => p.items) ?? []
     const totalWeight = allItems.reduce((sum, i) => {
-      const w = itemWeights[i.title] ?? i.weight
-      return sum + w
+      return sum + safeWeight(itemWeights[i.title], i.weight)
     }, 0)
     const earnedWeight = allItems
       .filter(i => checkedItems[i.id])
       .reduce((sum, i) => {
-        const w = itemWeights[i.title] ?? i.weight
-        return sum + w
+        return sum + safeWeight(itemWeights[i.title], i.weight)
       }, 0)
 
+    const capacity = Number.isFinite(totalWeight) ? totalWeight : 0
+    const energy = Number.isFinite(earnedWeight) ? earnedWeight : 0
+
     return {
-      energy: earnedWeight,
-      capacity: totalWeight,
-      stamina: totalWeight - earnedWeight,
-      ratio: totalWeight > 0 ? earnedWeight / totalWeight : 0,
+      energy,
+      capacity,
+      stamina: capacity - energy,
+      ratio: capacity > 0 ? energy / capacity : 0,
       done: Object.values(checkedItems).filter(Boolean).length,
       total: allItems.length,
     }

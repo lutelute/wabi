@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useExecution } from '../contexts/ExecutionContext'
 import { useRoutines } from '../contexts/RoutineContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { storage } from '../storage'
 
 function todayString(): string {
@@ -228,25 +229,33 @@ function drawConnections(
   }
 }
 
-const DAY_RINGS = 10
-const DAY_PARTICLES = 200
 const SUB_RINGS = 7
 const SUB_PARTICLES = 120
+
+function getParticleCount(density: 'low' | 'normal' | 'high'): number {
+  return density === 'low' ? 100 : density === 'high' ? 350 : 200
+}
 
 export function KaresansuiStones() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef = useRef<number>(0)
   const { progress } = useExecution()
   const { selected } = useRoutines()
+  const { settings } = useSettings()
   const [weekRatio, setWeekRatio] = useState(0)
   const [monthRatio, setMonthRatio] = useState(0)
+
+  const dayRings = Number.isFinite(settings.karesansuiRings) ? settings.karesansuiRings : 10
+  const dayParticleCount = getParticleCount(settings.particleCount)
 
   // パーティクル群（初回生成のみ）
   const dayParticlesRef = useRef<Particle[]>([])
   const weekParticlesRef = useRef<Particle[]>([])
   const monthParticlesRef = useRef<Particle[]>([])
 
-  const dayRatio = progress.capacity > 0 ? Math.min(progress.energy / progress.capacity, 1) : 0
+  const dayRatio = (Number.isFinite(progress.capacity) && progress.capacity > 0 && Number.isFinite(progress.energy))
+    ? Math.min(progress.energy / progress.capacity, 1)
+    : 0
 
   // 週・月の履歴
   useEffect(() => {
@@ -289,10 +298,17 @@ export function KaresansuiStones() {
     loadHistory()
   }, [selected?.id, progress.energy, progress.capacity])
 
+  // 設定変更時にパーティクル再生成
+  useEffect(() => {
+    dayParticlesRef.current = []
+    weekParticlesRef.current = []
+    monthParticlesRef.current = []
+  }, [dayRings, dayParticleCount])
+
   // アニメーションループ
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || progress.capacity === 0) return
+    if (!canvas) return
 
     const dpr = window.devicePixelRatio || 1
 
@@ -312,7 +328,7 @@ export function KaresansuiStones() {
     const subR = () => Math.min(w() * 0.14, h() * 0.28)
 
     if (dayParticlesRef.current.length === 0) {
-      dayParticlesRef.current = createParticles(DAY_PARTICLES, DAY_RINGS, dayR())
+      dayParticlesRef.current = createParticles(dayParticleCount, dayRings, dayR())
       weekParticlesRef.current = createParticles(SUB_PARTICLES, SUB_RINGS, subR())
       monthParticlesRef.current = createParticles(SUB_PARTICLES, SUB_RINGS, subR())
     }
@@ -337,7 +353,7 @@ export function KaresansuiStones() {
       const monthX = cw * 0.78
       const monthY = ch * 0.68
 
-      drawGarden(ctx, dayX, dayY, dr, dayRatio, '今日', dpr, time, dayParticlesRef.current, DAY_RINGS)
+      drawGarden(ctx, dayX, dayY, dr, dayRatio, '今日', dpr, time, dayParticlesRef.current, dayRings)
       drawGarden(ctx, weekX, weekY, sr, weekRatio, '今週', dpr, time, weekParticlesRef.current, SUB_RINGS)
       drawGarden(ctx, monthX, monthY, sr, monthRatio, '今月', dpr, time, monthParticlesRef.current, SUB_RINGS)
 
@@ -361,9 +377,7 @@ export function KaresansuiStones() {
       cancelAnimationFrame(rafRef.current)
       window.removeEventListener('resize', handleResize)
     }
-  }, [dayRatio, weekRatio, monthRatio, progress.capacity])
-
-  if (progress.capacity === 0) return null
+  }, [dayRatio, weekRatio, monthRatio, dayRings, dayParticleCount])
 
   return (
     <div className="relative">

@@ -22,4 +22,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('open-settings', callback)
     return () => ipcRenderer.removeListener('open-settings', callback)
   },
+
+  // Auto-updater
+  checkForUpdates: () => ipcRenderer.send('updater:check'),
+  installUpdate: () => ipcRenderer.send('updater:install'),
+  onUpdateStatus: (callback: (status: string) => void) => {
+    const handler = (_event: unknown, status: string) => callback(status)
+    ipcRenderer.on('updater:status', handler)
+    return () => ipcRenderer.removeListener('updater:status', handler)
+  },
 })

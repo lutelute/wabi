@@ -42,12 +42,18 @@ export interface AppSettings {
   timerNotification: boolean
   defaultWeight: number
   particleCount: 'low' | 'normal' | 'high'
+  softCapRatio: number        // よくやった閾値 (0.5-1.0, default 0.9)
+  weightMax: number            // 重みスライダー最大値 (5 or 10, default 5)
+  karesansuiRings: number      // 砂紋リング数 (3-15, default 10)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   timerNotification: true,
   defaultWeight: 1,
   particleCount: 'normal',
+  softCapRatio: 0.9,
+  weightMax: 5,
+  karesansuiRings: 10,
 }
 
 export interface ElectronAPI {
@@ -60,6 +66,10 @@ export interface ElectronAPI {
   saveSettings: (settings: AppSettings) => Promise<boolean>
   showNotification: (title: string, body: string) => Promise<boolean>
   onOpenSettings: (callback: () => void) => () => void
+  // Auto-updater
+  checkForUpdates: () => void
+  installUpdate: () => void
+  onUpdateStatus: (callback: (status: string) => void) => () => void
 }
 
 declare global {

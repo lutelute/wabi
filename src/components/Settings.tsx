@@ -1,20 +1,15 @@
 import { useState, useEffect } from 'react'
+import { useSettings } from '../contexts/SettingsContext'
 import { storage } from '../storage'
-import type { AppSettings } from '../types/routine'
-import { DEFAULT_SETTINGS } from '../types/routine'
 
 interface Props {
   onClose: () => void
 }
 
 export function Settings({ onClose }: Props) {
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+  const { settings, updateSetting } = useSettings()
   const [clearing, setClearing] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    storage.getSettings().then(setSettings)
-  }, [])
+  const [updateStatus, setUpdateStatus] = useState<string>('')
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -24,14 +19,14 @@ export function Settings({ onClose }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-    const next = { ...settings, [key]: value }
-    setSettings(next)
-    storage.saveSettings(next).then(() => {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 1200)
+  useEffect(() => {
+    if (!window.electronAPI?.onUpdateStatus) return
+    return window.electronAPI.onUpdateStatus((status: string) => {
+      setUpdateStatus(status)
     })
-  }
+  }, [])
+
+  const update = updateSetting
 
   const handleClearToday = async () => {
     if (!confirm('今日の実行データをリセットしますか？')) return
@@ -61,9 +56,6 @@ export function Settings({ onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-wabi-border">
           <h2 className="text-base font-medium text-wabi-text">設定</h2>
           <div className="flex items-center gap-3">
-            {saved && (
-              <span className="text-xs text-wabi-check animate-pulse">保存済み</span>
-            )}
             <button
               onClick={onClose}
               className="text-wabi-text-muted hover:text-wabi-text text-lg leading-none cursor-pointer"
@@ -85,51 +77,120 @@ export function Settings({ onClose }: Props) {
             />
           </Section>
 
-          {/* ルーティン */}
-          <Section title="ルーティン">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-wabi-text">デフォルトの重み</p>
-                <p className="text-xs text-wabi-text-muted mt-0.5">新規タスクの初期ウェイト</p>
+          {/* 体力 */}
+          <Section title="体力">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-wabi-text">ソフトキャップ</p>
+                  <p className="text-xs text-wabi-text-muted mt-0.5">「よくやった」が表示される閾値</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={50}
+                    max={100}
+                    step={5}
+                    value={Math.round((settings.softCapRatio ?? 0.9) * 100)}
+                    onChange={e => update('softCapRatio', Number(e.target.value) / 100)}
+                    className="w-20 h-1 accent-wabi-accent cursor-pointer"
+                    style={{ accentColor: '#c4a882' }}
+                  />
+                  <span className="text-sm font-mono text-wabi-text-muted w-8 text-center">
+                    {Math.round((settings.softCapRatio ?? 0.9) * 100)}%
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="range"
-                  min={1}
-                  max={5}
-                  value={settings.defaultWeight}
-                  onChange={e => update('defaultWeight', Number(e.target.value))}
-                  className="w-20 h-1 accent-wabi-accent cursor-pointer"
-                  style={{ accentColor: '#c4a882' }}
-                />
-                <span className="text-sm font-mono text-wabi-text-muted w-4 text-center">
-                  {settings.defaultWeight}
-                </span>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-wabi-text">重みの範囲</p>
+                  <p className="text-xs text-wabi-text-muted mt-0.5">スライダーの最大値</p>
+                </div>
+                <div className="flex gap-1">
+                  {([5, 10] as const).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => update('weightMax', v)}
+                      className={`px-3 py-1 text-xs rounded-lg cursor-pointer transition-colors ${
+                        (settings.weightMax ?? 5) === v
+                          ? 'bg-wabi-accent/20 text-wabi-text font-medium'
+                          : 'text-wabi-text-muted hover:bg-wabi-surface'
+                      }`}
+                    >
+                      1-{v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-wabi-text">デフォルトの重み</p>
+                  <p className="text-xs text-wabi-text-muted mt-0.5">新規タスクの初期ウェイト</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={settings.weightMax ?? 5}
+                    value={settings.defaultWeight}
+                    onChange={e => update('defaultWeight', Number(e.target.value))}
+                    className="w-20 h-1 accent-wabi-accent cursor-pointer"
+                    style={{ accentColor: '#c4a882' }}
+                  />
+                  <span className="text-sm font-mono text-wabi-text-muted w-4 text-center">
+                    {settings.defaultWeight}
+                  </span>
+                </div>
               </div>
             </div>
           </Section>
 
-          {/* 表示 */}
-          <Section title="表示">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-wabi-text">砂粒の密度</p>
-                <p className="text-xs text-wabi-text-muted mt-0.5">枯山水アニメーションの粒子数</p>
+          {/* 枯山水 */}
+          <Section title="枯山水">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-wabi-text">砂粒の密度</p>
+                  <p className="text-xs text-wabi-text-muted mt-0.5">アニメーションの粒子数</p>
+                </div>
+                <div className="flex gap-1">
+                  {(['low', 'normal', 'high'] as const).map(v => (
+                    <button
+                      key={v}
+                      onClick={() => update('particleCount', v)}
+                      className={`px-3 py-1 text-xs rounded-lg cursor-pointer transition-colors ${
+                        settings.particleCount === v
+                          ? 'bg-wabi-accent/20 text-wabi-text font-medium'
+                          : 'text-wabi-text-muted hover:bg-wabi-surface'
+                      }`}
+                    >
+                      {{ low: '少', normal: '標準', high: '多' }[v]}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex gap-1">
-                {(['low', 'normal', 'high'] as const).map(v => (
-                  <button
-                    key={v}
-                    onClick={() => update('particleCount', v)}
-                    className={`px-3 py-1 text-xs rounded-lg cursor-pointer transition-colors ${
-                      settings.particleCount === v
-                        ? 'bg-wabi-accent/20 text-wabi-text font-medium'
-                        : 'text-wabi-text-muted hover:bg-wabi-surface'
-                    }`}
-                  >
-                    {{ low: '少', normal: '標準', high: '多' }[v]}
-                  </button>
-                ))}
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-wabi-text">砂紋リング数</p>
+                  <p className="text-xs text-wabi-text-muted mt-0.5">同心円の本数</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={3}
+                    max={15}
+                    value={settings.karesansuiRings ?? 10}
+                    onChange={e => update('karesansuiRings', Number(e.target.value))}
+                    className="w-20 h-1 accent-wabi-accent cursor-pointer"
+                    style={{ accentColor: '#c4a882' }}
+                  />
+                  <span className="text-sm font-mono text-wabi-text-muted w-4 text-center">
+                    {settings.karesansuiRings ?? 10}
+                  </span>
+                </div>
               </div>
             </div>
           </Section>
@@ -150,11 +211,27 @@ export function Settings({ onClose }: Props) {
             </div>
           </Section>
 
-          {/* バージョン */}
-          <div className="pt-2 border-t border-wabi-border/50">
+          {/* バージョン + アップデート */}
+          <div className="pt-2 border-t border-wabi-border/50 space-y-2">
             <p className="text-xs text-wabi-text-muted text-center">
-              侘び v0.1.0
+              侘び v0.2.0
             </p>
+            {window.electronAPI?.checkForUpdates && (
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  onClick={() => {
+                    setUpdateStatus('確認中…')
+                    window.electronAPI.checkForUpdates()
+                  }}
+                  className="text-xs text-wabi-accent hover:text-wabi-text cursor-pointer"
+                >
+                  アップデートを確認
+                </button>
+                {updateStatus && (
+                  <p className="text-[10px] text-wabi-text-muted">{updateStatus}</p>
+                )}
+              </div>
+            )}
           </div>
 
         </div>

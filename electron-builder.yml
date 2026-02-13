@@ -2,6 +2,11 @@ appId: com.wabi.app
 productName: wabi
 copyright: Copyright © 2026
 
+publish:
+  provider: github
+  owner: lutelute
+  repo: wabi
+
 directories:
   output: release/${version}
   buildResources: build

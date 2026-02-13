@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, Menu, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, Notification, dialog } from 'electron'
 import path from 'path'
 import Store from 'electron-store'
+import { autoUpdater } from 'electron-updater'
 import type { Routine, ExecutionState } from '../src/types/routine'
 
 interface StoreSchema {
@@ -130,9 +131,53 @@ ipcMain.handle('store:clearExecutions', () => {
   return true
 })
 
+// ── Auto Updater ──
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  function sendStatus(text: string) {
+    mainWindow?.webContents.send('updater:status', text)
+  }
+
+  autoUpdater.on('checking-for-update', () => sendStatus('確認中…'))
+  autoUpdater.on('update-available', () => sendStatus('新しいバージョンをダウンロード中…'))
+  autoUpdater.on('update-not-available', () => sendStatus('最新バージョンです'))
+  autoUpdater.on('error', (err) => sendStatus(`エラー: ${err.message}`))
+  autoUpdater.on('download-progress', (info) => {
+    sendStatus(`ダウンロード中… ${Math.round(info.percent)}%`)
+  })
+  autoUpdater.on('update-downloaded', () => {
+    sendStatus('ダウンロード完了')
+    dialog.showMessageBox(mainWindow!, {
+      type: 'info',
+      title: 'アップデート',
+      message: '新しいバージョンがダウンロードされました。再起動して適用しますか？',
+      buttons: ['再起動', 'あとで'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall()
+    })
+  })
+}
+
+ipcMain.on('updater:check', () => {
+  autoUpdater.checkForUpdates()
+})
+
+ipcMain.on('updater:install', () => {
+  autoUpdater.quitAndInstall()
+})
+
 app.whenReady().then(() => {
   buildMenu()
   createWindow()
+
+  // パッケージ済みアプリでのみ自動アップデートチェック
+  if (app.isPackaged) {
+    setupAutoUpdater()
+    autoUpdater.checkForUpdates()
+  }
 })
 
 app.on('window-all-closed', () => {

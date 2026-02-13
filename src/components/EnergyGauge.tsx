@@ -1,15 +1,16 @@
 import { useExecution } from '../contexts/ExecutionContext'
+import { useSettings } from '../contexts/SettingsContext'
 
 export function EnergyGauge() {
   const { progress } = useExecution()
+  const { settings } = useSettings()
 
-  if (progress.capacity === 0) return null
+  if (!Number.isFinite(progress.capacity) || progress.capacity === 0) return null
 
-  // 体力: 満タンから始まり、タスク完了で減る
-  // ゲージは90%で「ちょうどいい」、100%消費で溢れる（やりきった）
-  const softCap = progress.capacity * 0.9
-  const spent = progress.energy
-  const staminaRatio = 1 - Math.min(spent / softCap, 1)
+  const softCapRatio = Number.isFinite(settings.softCapRatio) ? settings.softCapRatio : 0.9
+  const softCap = progress.capacity * softCapRatio
+  const spent = Number.isFinite(progress.energy) ? progress.energy : 0
+  const staminaRatio = softCap > 0 ? 1 - Math.min(spent / softCap, 1) : 1
   const overflowing = spent >= softCap
 
   return (

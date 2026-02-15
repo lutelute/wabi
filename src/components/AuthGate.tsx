@@ -23,7 +23,8 @@ export function AuthGate({ children }: Props) {
   const isElectron = !!window.electronAPI
 
   useEffect(() => {
-    if (isElectron || !isCloudEnabled()) {
+    // クラウド未設定 → 認証スキップ
+    if (!isCloudEnabled()) {
       setState('authenticated')
       return
     }
@@ -35,11 +36,18 @@ export function AuthGate({ children }: Props) {
     }
 
     supabase.auth.getSession().then(({ data }) => {
-      setState(data.session ? 'authenticated' : 'form')
+      if (data.session) {
+        setState('authenticated')
+      } else if (isElectron) {
+        // Electron: 未ログインでもアプリは使える（Settingsからログイン可能）
+        setState('authenticated')
+      } else {
+        setState('form')
+      }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState(session ? 'authenticated' : 'form')
+      setState(session ? 'authenticated' : isElectron ? 'authenticated' : 'form')
     })
 
     return () => subscription.unsubscribe()
@@ -54,7 +62,6 @@ export function AuthGate({ children }: Props) {
 
     try {
       if (method === 'otp') {
-        // OTPコードをメールで送信（リダイレクトなし）
         const { error: err } = await supabase.auth.signInWithOtp({
           email,
           options: {
@@ -239,6 +246,16 @@ export function AuthGate({ children }: Props) {
           <p className="text-xs text-wabi-text-muted text-center">
             メールに届く認証コードでログインします。{isStandalone ? '' : 'パスワード不要。'}
           </p>
+        )}
+
+        {/* Electron: スキップ可能 */}
+        {isElectron && (
+          <button
+            onClick={() => setState('authenticated')}
+            className="block mx-auto text-xs text-wabi-text-muted hover:text-wabi-text cursor-pointer"
+          >
+            スキップ（ローカルのみ）
+          </button>
         )}
       </div>
     </div>

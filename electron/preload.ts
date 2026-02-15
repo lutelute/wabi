@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   importBackup: () => ipcRenderer.invoke('backup:import'),
 
+  // Obsidian
+  selectObsidianVault: () => ipcRenderer.invoke('obsidian:selectVault'),
+  exportToObsidian: () => ipcRenderer.invoke('obsidian:export'),
+
   // Auto-updater
   checkForUpdates: () => ipcRenderer.send('updater:check'),
   installUpdate: () => ipcRenderer.send('updater:install'),

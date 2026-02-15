@@ -33,6 +33,13 @@ body {
   -webkit-app-region: no-drag;
 }
 
+/* Range slider — ドラッグ追従修正 */
+input[type="range"] {
+  -webkit-app-region: no-drag;
+  touch-action: none;
+  cursor: pointer;
+}
+
 /* Safe area for notch devices */
 @supports (padding-top: env(safe-area-inset-top)) {
   .safe-top {

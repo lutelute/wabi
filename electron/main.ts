@@ -130,6 +130,7 @@ ipcMain.handle('store:saveExecution', (_event, key: string, state: ExecutionStat
   const executions = store.get('executions')
   executions[key] = state
   store.set('executions', executions)
+  scheduleObsidianExport()
   return true
 })
 
@@ -258,6 +259,197 @@ ipcMain.handle('backup:import', async () => {
   } catch (e: any) {
     return { success: false, error: e.message }
   }
+})
+
+// ── Obsidian Integration ──
+
+function todayString(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function escapeYaml(s: string): string {
+  if (!s) return '""'
+  if (/[:#\[\]{}&*!|>'"%@`,\n]/.test(s) || s.trim() !== s) {
+    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  }
+  return s
+}
+
+function buildWabiYaml(date: string, routines: Routine[], executions: Record<string, ExecutionState>): string {
+  // 今日のルーティンを探す
+  const routine = routines[0] // メインルーティン
+  if (!routine) return ''
+
+  const execKey = `${routine.id}:${date}`
+  const exec = executions[execKey]
+  const dayState = executions[`day:${date}`] as any
+
+  const allItems = routine.phases.flatMap(p => p.items)
+  const checkedItems = exec?.checkedItems ?? {}
+  const doneCount = Object.values(checkedItems).filter(Boolean).length
+  const totalCount = allItems.length
+  const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
+
+  const lines: string[] = []
+  lines.push('wabi:')
+  lines.push(`  routine: ${escapeYaml(routine.name)}`)
+  lines.push(`  completion: "${doneCount}/${totalCount}"`)
+  lines.push(`  completion_pct: ${pct}`)
+
+  // スタミナ・メンタルログ
+  if (dayState?.staminaLog?.length > 0) {
+    lines.push(`  stamina: [${dayState.staminaLog.map((e: any) => e.level).join(', ')}]`)
+  }
+  if (dayState?.mentalLog?.length > 0) {
+    lines.push(`  mental: [${dayState.mentalLog.map((e: any) => e.level).join(', ')}]`)
+  }
+
+  // ムード
+  if (dayState?.moodLog?.length > 0) {
+    lines.push(`  moods: [${dayState.moodLog.map((e: any) => e.mood).join(', ')}]`)
+  }
+
+  // チェックイン
+  if (dayState?.checkIns?.length > 0) {
+    lines.push('  check_ins:')
+    for (const ci of dayState.checkIns) {
+      lines.push(`    - time: "${ci.time}"`)
+      lines.push(`      stamina: ${ci.stamina}`)
+      lines.push(`      mental: ${ci.mental}`)
+      if (ci.tags?.length > 0) {
+        lines.push(`      tags: [${ci.tags.map((t: string) => escapeYaml(t)).join(', ')}]`)
+      }
+      if (ci.comment) {
+        lines.push(`      comment: ${escapeYaml(ci.comment)}`)
+      }
+    }
+  }
+
+  // 各項目の完了状態
+  if (allItems.length > 0) {
+    lines.push('  items:')
+    for (const item of allItems) {
+      lines.push(`    - title: ${escapeYaml(item.title)}`)
+      lines.push(`      done: ${!!checkedItems[item.id]}`)
+    }
+  }
+
+  // やらないと決めたこと
+  if (exec?.declined) {
+    lines.push(`  declined: ${escapeYaml(exec.declined)}`)
+  }
+
+  return lines.join('\n')
+}
+
+function writeObsidianDailyNote(date: string): { success: boolean; error?: string } {
+  try {
+    const settings = store.get('settings' as any) as any ?? {}
+    const vaultPath = settings.obsidianVaultPath
+    if (!vaultPath) return { success: false, error: 'Vault未設定' }
+
+    const routines = store.get('routines')
+    const executions = store.get('executions')
+    if (!routines.length) return { success: false, error: 'ルーティン未定義' }
+
+    const wabiYaml = buildWabiYaml(date, routines, executions)
+    if (!wabiYaml) return { success: false, error: 'データなし' }
+
+    // デイリーノート内容
+    const dayState = executions[`day:${date}`] as any
+    const dailyNotes = dayState?.dailyNotes || ''
+
+    const filePath = path.join(vaultPath, `${date}.md`)
+
+    let content = ''
+    if (fs.existsSync(filePath)) {
+      content = fs.readFileSync(filePath, 'utf-8')
+    }
+
+    // フロントマターを解析・更新
+    const fmRegex = /^---\n([\s\S]*?)\n---/
+    const match = content.match(fmRegex)
+
+    let frontmatterBody = ''
+    let body = ''
+
+    if (match) {
+      // 既存のフロントマターからwabiブロックを除去
+      const existingFm = match[1]
+      const fmLines = existingFm.split('\n')
+      const nonWabiLines: string[] = []
+      let inWabi = false
+      for (const line of fmLines) {
+        if (line.startsWith('wabi:')) {
+          inWabi = true
+          continue
+        }
+        if (inWabi && (line.startsWith('  ') || line.startsWith('\t'))) {
+          continue // wabiの子行をスキップ
+        }
+        inWabi = false
+        nonWabiLines.push(line)
+      }
+      frontmatterBody = nonWabiLines.filter(l => l.trim()).join('\n')
+      body = content.slice(match[0].length).replace(/^\n+/, '')
+    } else {
+      body = content
+    }
+
+    // wabiセクションを追加
+    const fmParts = [frontmatterBody, wabiYaml].filter(Boolean)
+    const newFrontmatter = fmParts.join('\n')
+
+    // body内のwabiデイリーノートを更新
+    const wabiBodyRegex = /<!-- wabi:start -->[\s\S]*?<!-- wabi:end -->/
+    const wabiBody = dailyNotes
+      ? `<!-- wabi:start -->\n## wabi\n${dailyNotes}\n<!-- wabi:end -->`
+      : ''
+
+    if (wabiBodyRegex.test(body)) {
+      body = body.replace(wabiBodyRegex, wabiBody).trim()
+    } else if (wabiBody) {
+      body = body ? `${body}\n\n${wabiBody}` : wabiBody
+    }
+
+    const output = `---\n${newFrontmatter}\n---\n${body ? '\n' + body + '\n' : '\n'}`
+
+    // ディレクトリ確認
+    const dir = path.dirname(filePath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
+    fs.writeFileSync(filePath, output, 'utf-8')
+    return { success: true }
+  } catch (e: any) {
+    console.error('[wabi] obsidian export failed:', e)
+    return { success: false, error: e.message }
+  }
+}
+
+// デバウンスされた自動エクスポート
+let obsidianExportTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleObsidianExport() {
+  const settings = store.get('settings' as any) as any ?? {}
+  if (!settings.obsidianVaultPath) return
+  if (obsidianExportTimer) clearTimeout(obsidianExportTimer)
+  obsidianExportTimer = setTimeout(() => {
+    writeObsidianDailyNote(todayString())
+  }, 3000) // 3秒デバウンス
+}
+
+ipcMain.handle('obsidian:selectVault', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+    title: 'Obsidian デイリーノートフォルダを選択',
+    properties: ['openDirectory'],
+  })
+  if (canceled || filePaths.length === 0) return null
+  return filePaths[0]
+})
+
+ipcMain.handle('obsidian:export', () => {
+  return writeObsidianDailyNote(todayString())
 })
 
 // ── Auto Updater ──

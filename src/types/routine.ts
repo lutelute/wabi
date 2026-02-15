@@ -132,6 +132,7 @@ export interface AppSettings {
   karesansuiRings: number      // 砂紋リング数 (3-15, default 10)
   conceptRoutinesEnabled: boolean
   reminderSoundEnabled: boolean
+  obsidianVaultPath: string    // Obsidian Vaultのデイリーノートフォルダパス（空=無効）
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -143,6 +144,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   karesansuiRings: 10,
   conceptRoutinesEnabled: true,
   reminderSoundEnabled: true,
+  obsidianVaultPath: '',
 }
 
 export interface BackupData {
@@ -166,6 +168,9 @@ export interface ElectronAPI {
   // Backup
   exportBackup: () => Promise<{ success: boolean; path?: string }>
   importBackup: () => Promise<{ success: boolean; error?: string }>
+  // Obsidian
+  selectObsidianVault: () => Promise<string | null>
+  exportToObsidian: () => Promise<{ success: boolean; error?: string }>
   // Auto-updater
   checkForUpdates: () => void
   installUpdate: () => void

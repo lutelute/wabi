@@ -54,7 +54,7 @@ function lsRestoreIfEmpty<T>(key: string, fallback: T): T {
 let syncInitialized = false
 
 async function initSyncOnce() {
-  if (syncInitialized || !isWeb || !isCloudEnabled()) return
+  if (syncInitialized || !isCloudEnabled()) return
   syncInitialized = true
 
   setupOnlineListener()
@@ -63,25 +63,42 @@ async function initSyncOnce() {
     try {
       const remote = await pullAll()
       if (remote) {
-        // リモートデータをローカルにマージ（リモート優先）
-        if (remote['routines']) {
-          const localRoutines = lsGet<Routine[]>('wabi:routines', [])
-          if (localRoutines.length === 0) {
-            lsSet('wabi:routines', remote['routines'])
+        if (isElectron) {
+          // Electron: リモートデータをelectron-storeにマージ
+          if (remote['routines']) {
+            const local = await window.electronAPI.getRoutines()
+            if (!local || local.length === 0) {
+              await window.electronAPI.saveRoutines(remote['routines'] as Routine[])
+            }
           }
-        }
-        if (remote['settings']) {
-          const localSettings = lsGet<Partial<AppSettings>>('wabi:settings', {})
-          if (Object.keys(localSettings).length === 0) {
-            lsSet('wabi:settings', remote['settings'])
+          for (const [key, value] of Object.entries(remote)) {
+            if (key.startsWith('exec:') || key.startsWith('day:')) {
+              const local = await window.electronAPI.getExecution(key)
+              if (!local) {
+                await window.electronAPI.saveExecution(key, value as ExecutionState)
+              }
+            }
           }
-        }
-        // exec:* と day:* のキーをマージ
-        for (const [key, value] of Object.entries(remote)) {
-          if (key.startsWith('exec:') || key.startsWith('day:')) {
-            const lsKey = `wabi:${key}`
-            if (!localStorage.getItem(lsKey)) {
-              lsSet(lsKey, value)
+        } else {
+          // Web: リモートデータをlocalStorageにマージ
+          if (remote['routines']) {
+            const localRoutines = lsGet<Routine[]>('wabi:routines', [])
+            if (localRoutines.length === 0) {
+              lsSet('wabi:routines', remote['routines'])
+            }
+          }
+          if (remote['settings']) {
+            const localSettings = lsGet<Partial<AppSettings>>('wabi:settings', {})
+            if (Object.keys(localSettings).length === 0) {
+              lsSet('wabi:settings', remote['settings'])
+            }
+          }
+          for (const [key, value] of Object.entries(remote)) {
+            if (key.startsWith('exec:') || key.startsWith('day:')) {
+              const lsKey = `wabi:${key}`
+              if (!localStorage.getItem(lsKey)) {
+                lsSet(lsKey, value)
+              }
             }
           }
         }
@@ -93,19 +110,26 @@ async function initSyncOnce() {
 }
 
 function syncPush(dataKey: string, data: unknown) {
-  if (!isWeb || !isCloudEnabled()) return
+  if (!isCloudEnabled()) return
   debouncedPush(dataKey, data)
 }
 
 export const storage = {
   async getRoutines(): Promise<Routine[]> {
-    if (isElectron) return window.electronAPI.getRoutines()
+    if (isElectron) {
+      await initSyncOnce()
+      return window.electronAPI.getRoutines()
+    }
     await initSyncOnce()
     return lsRestoreIfEmpty<Routine[]>('wabi:routines', [])
   },
 
   async saveRoutines(routines: Routine[]): Promise<boolean> {
-    if (isElectron) return window.electronAPI.saveRoutines(routines)
+    if (isElectron) {
+      const ok = await window.electronAPI.saveRoutines(routines)
+      syncPush('routines', routines)
+      return ok
+    }
     lsRotate('wabi:routines')
     lsSet('wabi:routines', routines)
     syncPush('routines', routines)
@@ -118,7 +142,11 @@ export const storage = {
   },
 
   async saveExecution(key: string, state: ExecutionState): Promise<boolean> {
-    if (isElectron) return window.electronAPI.saveExecution(key, state)
+    if (isElectron) {
+      const ok = await window.electronAPI.saveExecution(key, state)
+      syncPush(`exec:${key}`, state)
+      return ok
+    }
     lsRotate(`wabi:exec:${key}`)
     lsSet(`wabi:exec:${key}`, state)
     syncPush(`exec:${key}`, state)
@@ -131,7 +159,11 @@ export const storage = {
   },
 
   async saveDayState(key: string, state: DayState): Promise<boolean> {
-    if (isElectron) return window.electronAPI.saveExecution(key, state as any)
+    if (isElectron) {
+      const ok = await window.electronAPI.saveExecution(key, state as any)
+      syncPush(key, state)
+      return ok
+    }
     lsRotate(`wabi:exec:${key}`)
     lsSet(`wabi:exec:${key}`, state)
     syncPush(key, state)
@@ -147,7 +179,11 @@ export const storage = {
   },
 
   async saveSettings(settings: AppSettings): Promise<boolean> {
-    if (isElectron) return window.electronAPI.saveSettings(settings)
+    if (isElectron) {
+      const ok = await window.electronAPI.saveSettings(settings)
+      syncPush('settings', settings)
+      return ok
+    }
     lsRotate('wabi:settings')
     lsSet('wabi:settings', settings)
     syncPush('settings', settings)

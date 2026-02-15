@@ -13,6 +13,7 @@ export function Settings({ onClose }: Props) {
   const [clearing, setClearing] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<string>('')
   const [backupStatus, setBackupStatus] = useState<string>('')
+  const [obsidianStatus, setObsidianStatus] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isElectron = !!window.electronAPI
 
@@ -334,15 +335,62 @@ export function Settings({ onClose }: Props) {
             </div>
           </Section>
 
-          {/* アカウント (Web版のみ) */}
-          {!isElectron && isCloudEnabled() && (
+          {/* Obsidian連携 (Electron版のみ) */}
+          {isElectron && (
+            <Section title="Obsidian連携">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-wabi-text">デイリーノートフォルダ</p>
+                  <p className="text-xs text-wabi-text-muted mt-0.5">YYYY-MM-DD.md が保存されるフォルダ</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      const selected = await window.electronAPI.selectObsidianVault()
+                      if (selected) update('obsidianVaultPath', selected)
+                    }}
+                    className="px-3 py-1.5 text-xs bg-wabi-surface border border-wabi-border rounded-lg hover:bg-wabi-accent/10 cursor-pointer transition-colors shrink-0"
+                  >
+                    フォルダ選択
+                  </button>
+                  <span className="text-xs text-wabi-text-muted truncate">
+                    {settings.obsidianVaultPath || '未設定'}
+                  </span>
+                </div>
+                {settings.obsidianVaultPath && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        setObsidianStatus('')
+                        const result = await window.electronAPI.exportToObsidian()
+                        setObsidianStatus(result.success ? '書き出し完了' : `エラー: ${result.error}`)
+                      }}
+                      className="px-3 py-1.5 text-xs bg-wabi-surface border border-wabi-border rounded-lg hover:bg-wabi-accent/10 cursor-pointer transition-colors"
+                    >
+                      今すぐ書き出し
+                    </button>
+                    <button
+                      onClick={() => update('obsidianVaultPath', '' as any)}
+                      className="text-xs text-wabi-text-muted hover:text-wabi-timer cursor-pointer"
+                    >
+                      解除
+                    </button>
+                  </div>
+                )}
+                {obsidianStatus && (
+                  <p className="text-xs text-wabi-text-muted">{obsidianStatus}</p>
+                )}
+                <p className="text-xs text-wabi-text-muted">
+                  設定するとデータ保存時に自動でObsidianのデイリーノート（YAML frontmatter）に書き出します。
+                </p>
+              </div>
+            </Section>
+          )}
+
+          {/* アカウント */}
+          {isCloudEnabled() && (
             <Section title="アカウント">
-              <button
-                onClick={handleLogout}
-                className="text-sm text-wabi-timer hover:text-wabi-text cursor-pointer"
-              >
-                ログアウト
-              </button>
+              <AccountSection onLogout={handleLogout} />
             </Section>
           )}
 
@@ -381,6 +429,119 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h3 className="text-xs font-medium text-wabi-text-muted mb-3">{title}</h3>
       {children}
     </div>
+  )
+}
+
+function AccountSection({ onLogout }: { onLogout: () => void }) {
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [checkLoading, setCheckLoading] = useState(true)
+  const [showLogin, setShowLogin] = useState(false)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError, setLoginError] = useState('')
+
+  useEffect(() => {
+    const supabase = getSupabase()
+    if (!supabase) { setCheckLoading(false); return }
+    supabase.auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user?.email ?? null)
+      setCheckLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email ?? null)
+      if (session) setShowLogin(false)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (checkLoading) return <p className="text-xs text-wabi-text-muted">確認中…</p>
+
+  if (userEmail) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-wabi-text">{userEmail}</p>
+        <p className="text-xs text-wabi-text-muted">クラウド同期が有効です</p>
+        <button
+          onClick={onLogout}
+          className="text-sm text-wabi-timer hover:text-wabi-text cursor-pointer"
+        >
+          ログアウト
+        </button>
+      </div>
+    )
+  }
+
+  if (!showLogin) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-wabi-text-muted">ログインするとデータがクラウドに同期されます</p>
+        <button
+          onClick={() => setShowLogin(true)}
+          className="text-sm text-wabi-accent hover:text-wabi-text cursor-pointer"
+        >
+          ログイン
+        </button>
+      </div>
+    )
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginError('')
+    setLoginLoading(true)
+    const supabase = getSupabase()
+    if (!supabase) return
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      })
+      if (error) {
+        setLoginError(error.message === 'Invalid login credentials' ? 'メールアドレスまたはパスワードが違います' : error.message)
+      }
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleLogin} className="space-y-2">
+      <input
+        type="email"
+        value={loginEmail}
+        onChange={e => setLoginEmail(e.target.value)}
+        placeholder="メールアドレス"
+        required
+        className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
+      />
+      <input
+        type="password"
+        value={loginPassword}
+        onChange={e => setLoginPassword(e.target.value)}
+        placeholder="パスワード"
+        required
+        minLength={6}
+        className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
+      />
+      {loginError && <p className="text-xs text-wabi-timer">{loginError}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={loginLoading}
+          className="px-3 py-1.5 text-xs bg-wabi-accent/20 text-wabi-text rounded-lg hover:bg-wabi-accent/30 cursor-pointer disabled:opacity-50"
+        >
+          {loginLoading ? '処理中…' : 'ログイン'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setShowLogin(false); setLoginError('') }}
+          className="text-xs text-wabi-text-muted hover:text-wabi-text cursor-pointer"
+        >
+          キャンセル
+        </button>
+      </div>
+    </form>
   )
 }
 

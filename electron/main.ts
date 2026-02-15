@@ -455,9 +455,10 @@ ipcMain.handle('obsidian:export', () => {
   return writeObsidianDailyNote(todayString())
 })
 
-// ── Auto Updater (署名なし: ダウンロードリンク方式) ──
+// ── Auto Updater (自動ダウンロード + インストール) ──
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = false
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
 
   function sendStatus(text: string) {
     mainWindow?.webContents.send('updater:status', text)
@@ -465,20 +466,29 @@ function setupAutoUpdater() {
 
   autoUpdater.on('checking-for-update', () => sendStatus('確認中…'))
   autoUpdater.on('update-available', (info) => {
-    sendStatus(`v${info.version} が利用可能です`)
+    sendStatus(`v${info.version} をダウンロード中…`)
     mainWindow?.webContents.send('updater:new-version', info.version)
   })
   autoUpdater.on('update-not-available', () => sendStatus('最新バージョンです'))
-  autoUpdater.on('error', () => sendStatus('最新バージョンです'))
+  autoUpdater.on('error', (err) => {
+    console.error('[wabi] updater error:', err)
+    sendStatus('更新の確認に失敗しました')
+  })
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('updater:download-progress', Math.round(progress.percent))
+  })
+  autoUpdater.on('update-downloaded', (info) => {
+    sendStatus(`v${info.version} インストール準備完了`)
+    mainWindow?.webContents.send('updater:ready', info.version)
+  })
 }
 
 ipcMain.on('updater:check', () => {
   autoUpdater.checkForUpdates()
 })
 
-ipcMain.on('updater:open-release', () => {
-  const { shell } = require('electron') as typeof import('electron')
-  shell.openExternal('https://github.com/lutelute/wabi/releases/latest')
+ipcMain.on('updater:install', () => {
+  autoUpdater.quitAndInstall()
 })
 
 app.whenReady().then(() => {

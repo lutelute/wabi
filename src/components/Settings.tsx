@@ -13,6 +13,8 @@ export function Settings({ onClose }: Props) {
   const [clearing, setClearing] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<string>('')
   const [newVersion, setNewVersion] = useState<string>('')
+  const [downloadPercent, setDownloadPercent] = useState<number>(-1)
+  const [updateReady, setUpdateReady] = useState(false)
   const [backupStatus, setBackupStatus] = useState<string>('')
   const [obsidianStatus, setObsidianStatus] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -33,8 +35,17 @@ export function Settings({ onClose }: Props) {
     })
     const unsub2 = window.electronAPI.onNewVersion?.((version: string) => {
       setNewVersion(version)
+      setDownloadPercent(0)
     })
-    return () => { unsub1(); unsub2?.() }
+    const unsub3 = window.electronAPI.onDownloadProgress?.((percent: number) => {
+      setDownloadPercent(percent)
+    })
+    const unsub4 = window.electronAPI.onUpdateReady?.((version: string) => {
+      setUpdateReady(true)
+      setDownloadPercent(100)
+      setUpdateStatus(`v${version} インストール準備完了`)
+    })
+    return () => { unsub1(); unsub2?.(); unsub3?.(); unsub4?.() }
   }, [])
 
   const update = updateSetting
@@ -400,25 +411,40 @@ export function Settings({ onClose }: Props) {
           {/* バージョン + アップデート */}
           <div className="pt-2 border-t border-wabi-border/50 space-y-2">
             <p className="text-xs text-wabi-text-muted text-center">
-              侘び v1.2.0
+              侘び v1.3.1
             </p>
             {window.electronAPI?.checkForUpdates && (
-              <div className="flex flex-col items-center gap-1">
-                <button
-                  onClick={() => {
-                    setUpdateStatus('確認中…')
-                    window.electronAPI.checkForUpdates()
-                  }}
-                  className="text-xs text-wabi-accent hover:text-wabi-text cursor-pointer"
-                >
-                  アップデートを確認
-                </button>
-                {newVersion && (
+              <div className="flex flex-col items-center gap-1.5">
+                {!newVersion && (
                   <button
-                    onClick={() => window.electronAPI.openReleasePage()}
+                    onClick={() => {
+                      setUpdateStatus('確認中…')
+                      window.electronAPI.checkForUpdates()
+                    }}
                     className="text-xs text-wabi-accent hover:text-wabi-text cursor-pointer"
                   >
-                    v{newVersion} をダウンロード →
+                    アップデートを確認
+                  </button>
+                )}
+                {newVersion && downloadPercent >= 0 && !updateReady && (
+                  <div className="w-full max-w-48 space-y-1">
+                    <p className="text-[10px] text-wabi-text-muted text-center">
+                      v{newVersion} ダウンロード中… {downloadPercent}%
+                    </p>
+                    <div className="h-1 bg-wabi-border/30 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-wabi-accent rounded-full transition-all duration-300"
+                        style={{ width: `${downloadPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {updateReady && (
+                  <button
+                    onClick={() => window.electronAPI.installUpdate()}
+                    className="text-xs text-white bg-wabi-accent hover:bg-wabi-accent/80 cursor-pointer px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    v{newVersion} をインストールして再起動
                   </button>
                 )}
                 {updateStatus && !newVersion && (

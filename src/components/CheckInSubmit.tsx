@@ -73,16 +73,29 @@ export function CheckInSubmit() {
 
   const shift = shiftMessage(moodLog)
 
-  const handleBarClick = useCallback((
-    e: React.MouseEvent<HTMLDivElement>,
+  const calcValue = (clientX: number, bar: HTMLDivElement) => {
+    const rect = bar.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    return Math.round(ratio * 100)
+  }
+
+  const handleBarPointerDown = useCallback((
+    e: React.PointerEvent<HTMLDivElement>,
     ref: React.RefObject<HTMLDivElement | null>,
     setter: (v: number) => void,
   ) => {
     const bar = ref.current
     if (!bar) return
-    const rect = bar.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    setter(Math.round(ratio * 100))
+    bar.setPointerCapture(e.pointerId)
+    setter(calcValue(e.clientX, bar))
+
+    const onMove = (ev: PointerEvent) => setter(calcValue(ev.clientX, bar))
+    const onUp = () => {
+      bar.removeEventListener('pointermove', onMove)
+      bar.removeEventListener('pointerup', onUp)
+    }
+    bar.addEventListener('pointermove', onMove)
+    bar.addEventListener('pointerup', onUp)
   }, [])
 
   const toggleTag = useCallback((tag: string) => {
@@ -120,7 +133,7 @@ export function CheckInSubmit() {
             gradientFrom="#059669"
             gradientTo="#34d399"
             trackColor="rgba(5,150,105,0.1)"
-            onClick={e => handleBarClick(e, staminaBarRef, setStamina)}
+            onPointerDown={e => handleBarPointerDown(e, staminaBarRef, setStamina)}
           />
           <GaugeBar
             label="心"
@@ -129,7 +142,7 @@ export function CheckInSubmit() {
             gradientFrom="#0284c7"
             gradientTo="#38bdf8"
             trackColor="rgba(2,132,199,0.1)"
-            onClick={e => handleBarClick(e, mentalBarRef, setMental)}
+            onPointerDown={e => handleBarPointerDown(e, mentalBarRef, setMental)}
           />
         </div>
 
@@ -271,14 +284,14 @@ export function CheckInSubmit() {
 }
 
 /** ゲージバー */
-function GaugeBar({ label, value, barRef, gradientFrom, gradientTo, trackColor, onClick }: {
+function GaugeBar({ label, value, barRef, gradientFrom, gradientTo, trackColor, onPointerDown }: {
   label: string
   value: number
   barRef: React.RefObject<HTMLDivElement | null>
   gradientFrom: string
   gradientTo: string
   trackColor: string
-  onClick: (e: React.MouseEvent<HTMLDivElement>) => void
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
 }) {
   return (
     <div className="flex-1 min-w-0">
@@ -288,8 +301,8 @@ function GaugeBar({ label, value, barRef, gradientFrom, gradientTo, trackColor, 
       </div>
       <div
         ref={barRef}
-        onClick={onClick}
-        className="relative h-3 rounded-full cursor-pointer"
+        onPointerDown={onPointerDown}
+        className="relative h-3 rounded-full cursor-pointer touch-none"
         style={{ background: trackColor }}
       >
         <div

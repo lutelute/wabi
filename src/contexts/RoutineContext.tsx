@@ -85,11 +85,12 @@ export function RoutineProvider({ children }: { children: ReactNode }) {
   const createRoutine = useCallback((name: string) => {
     const id = nanoid(8)
     const now = new Date().toISOString()
+    const defaultText = `## 準備\n- 今日やることを決める *1\n- 環境を整える *1\n\n## 実行\n- メインタスクに取り組む *3\n- 振り返る *1`
     const routine: Routine = {
       id,
       name,
-      text: '',
-      phases: [],
+      text: defaultText,
+      phases: parseRoutineText(defaultText),
       createdAt: now,
       updatedAt: now,
     }

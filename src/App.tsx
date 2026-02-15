@@ -97,13 +97,13 @@ export default function App() {
                     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
                       <ReminderBar />
                       <KaresansuiStones />
-                      <CheckInSubmit />
 
                       {mode === 'execute' && (
                         <>
                           <EnergyGauge />
                           <NowFocus />
                           <ActionChecklist />
+                          <CheckInSubmit />
                           <DailyNote />
                         </>
                       )}

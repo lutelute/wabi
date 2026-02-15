@@ -56,6 +56,21 @@ export function Sidebar() {
     }
   }
 
+  const handleAddAllRoutine = (routine: Parameters<typeof addAction>[1]) => {
+    for (const phase of routine.phases) {
+      for (const item of phase.items) {
+        if (!isItemAdded(item.id)) {
+          addAction(item, routine, phase)
+        }
+      }
+    }
+  }
+
+  const isRoutineFullyAdded = (routine: Parameters<typeof addAction>[1]) => {
+    const items = routine.phases.flatMap(p => p.items)
+    return items.length > 0 && items.every(item => isItemAdded(item.id))
+  }
+
   return (
     <aside className="w-56 md:w-56 shrink-0 bg-wabi-surface border-r border-wabi-border flex flex-col pt-4 md:pt-12 h-full">
       {/* Section 1: ルーティン */}
@@ -114,13 +129,29 @@ export function Sidebar() {
                       <path d="M3 1l5 4-5 4z" />
                     </svg>
                     <span className="flex-1 truncate">{r.name}</span>
+                    {r.phases.flatMap(p => p.items).length > 0 && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          handleAddAllRoutine(r)
+                        }}
+                        className={`opacity-0 group-hover:opacity-100 text-[9px] ml-1 cursor-pointer px-1 py-0.5 rounded transition-colors ${
+                          isRoutineFullyAdded(r)
+                            ? 'text-wabi-accent/50'
+                            : 'text-wabi-text-muted/50 hover:text-wabi-accent hover:bg-wabi-accent/10'
+                        }`}
+                        title="全アイテムを追加"
+                      >
+                        +全
+                      </button>
+                    )}
                     {routines.length > 1 && (
                       <button
                         onClick={e => {
                           e.stopPropagation()
                           deleteRoutine(r.id)
                         }}
-                        className="opacity-0 group-hover:opacity-100 text-wabi-text-muted hover:text-wabi-timer text-xs ml-2 cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 text-wabi-text-muted hover:text-wabi-timer text-xs ml-1 cursor-pointer"
                         title="削除"
                       >
                         ×
@@ -133,44 +164,50 @@ export function Sidebar() {
               {/* 展開: フェーズ + アイテム */}
               {isExpanded && (
                 <div className="ml-2 mb-2">
-                  {r.phases.map(phase => (
-                    <div key={phase.id}>
-                      {phase.title && (
-                        <div className="flex items-center justify-between px-2 py-1">
-                          <span className="text-[10px] font-medium text-wabi-text-muted/60">{phase.title}</span>
-                          <button
-                            onClick={() => handleAddAllPhase(r, phase)}
-                            className="text-[9px] text-wabi-text-muted/40 hover:text-wabi-accent cursor-pointer"
-                            title="全追加"
-                          >
-                            +全
-                          </button>
-                        </div>
-                      )}
-                      {phase.items.map(item => {
-                        const added = isItemAdded(item.id)
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => handleItemClick(item, r, phase)}
-                            className={`w-full flex items-center gap-1.5 px-2 py-1 text-left text-[11px] rounded cursor-pointer transition-colors ${
-                              added
-                                ? 'text-wabi-accent bg-wabi-accent/5'
-                                : 'text-wabi-text-muted/70 hover:bg-wabi-bg/30 hover:text-wabi-text-muted'
-                            }`}
-                          >
-                            <span className={`shrink-0 text-[8px] ${added ? 'text-wabi-accent' : 'text-wabi-text-muted/30'}`}>
-                              {added ? '●' : '○'}
-                            </span>
-                            <span className="truncate">{item.title}</span>
-                            {item.isMental && (
-                              <span className="text-[8px] text-amber-600/50 shrink-0">m</span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ))}
+                  {r.phases.length === 0 || r.phases.every(p => p.items.length === 0) ? (
+                    <p className="px-2 py-2 text-[10px] text-wabi-text-muted/40 italic">
+                      「編集」モードでアイテムを追加
+                    </p>
+                  ) : (
+                    r.phases.map(phase => (
+                      <div key={phase.id}>
+                        {phase.title && (
+                          <div className="flex items-center justify-between px-2 py-1">
+                            <span className="text-[10px] font-medium text-wabi-text-muted/60">{phase.title}</span>
+                            <button
+                              onClick={() => handleAddAllPhase(r, phase)}
+                              className="text-[9px] text-wabi-text-muted/40 hover:text-wabi-accent cursor-pointer"
+                              title="全追加"
+                            >
+                              +全
+                            </button>
+                          </div>
+                        )}
+                        {phase.items.map(item => {
+                          const added = isItemAdded(item.id)
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => handleItemClick(item, r, phase)}
+                              className={`w-full flex items-center gap-1.5 px-2 py-1 text-left text-[11px] rounded cursor-pointer transition-colors ${
+                                added
+                                  ? 'text-wabi-accent bg-wabi-accent/5'
+                                  : 'text-wabi-text-muted/70 hover:bg-wabi-bg/30 hover:text-wabi-text-muted'
+                              }`}
+                            >
+                              <span className={`shrink-0 text-[8px] ${added ? 'text-wabi-accent' : 'text-wabi-text-muted/30'}`}>
+                                {added ? '●' : '○'}
+                              </span>
+                              <span className="truncate">{item.title}</span>
+                              {item.isMental && (
+                                <span className="text-[8px] text-amber-600/50 shrink-0">m</span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>

@@ -63,13 +63,28 @@ interface LevelEntry { level: number; time: string }
 export function CheckInSubmit() {
   const { checkIns, addCheckIn, staminaLog, mentalLog, moodLog, dailyNotes, addMood } = useDay()
   const [comment, setComment] = useState('')
-  const [stamina, setStamina] = useState(50)
   const [mental, setMental] = useState(50)
   const [tags, setTags] = useState<string[]>([])
   const [submitted, setSubmitted] = useState(false)
   const [copied, setCopied] = useState(false)
   const staminaBarRef = useRef<HTMLDivElement>(null)
   const mentalBarRef = useRef<HTMLDivElement>(null)
+
+  // 体力の上限: 最後のチェックイン値、なければ100（寝て回復した状態）
+  const staminaCeiling = checkIns.length > 0 ? checkIns[checkIns.length - 1].stamina : 100
+  const [stamina, setStaminaRaw] = useState(staminaCeiling)
+  const [resting, setResting] = useState(false)
+
+  // チェックイン後に上限が変わったらスライダーも合わせる
+  useEffect(() => {
+    setStaminaRaw(staminaCeiling)
+    setResting(false)
+  }, [staminaCeiling])
+
+  // 体力は上限を超えないようにキャップ（休息中は解除）
+  const setStamina = useCallback((v: number) => {
+    setStaminaRaw(resting ? v : Math.min(v, staminaCeiling))
+  }, [staminaCeiling, resting])
 
   const shift = shiftMessage(moodLog)
 
@@ -129,11 +144,27 @@ export function CheckInSubmit() {
           <GaugeBar
             label="体力"
             value={stamina}
+            ceiling={resting ? undefined : staminaCeiling}
             barRef={staminaBarRef}
             gradientFrom="#059669"
             gradientTo="#34d399"
             trackColor="rgba(5,150,105,0.1)"
             onPointerDown={e => handleBarPointerDown(e, staminaBarRef, setStamina)}
+            trailing={
+              <button
+                onClick={() => {
+                  setResting(v => !v)
+                  if (!resting) setStaminaRaw(Math.min(staminaCeiling + 30, 100))
+                }}
+                className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-colors whitespace-nowrap ${
+                  resting
+                    ? 'bg-indigo-500/15 text-indigo-400'
+                    : 'text-wabi-text-muted/40 hover:text-wabi-text-muted hover:bg-wabi-bg'
+                }`}
+              >
+                {resting ? '休息中' : '休息'}
+              </button>
+            }
           />
           <GaugeBar
             label="心"
@@ -284,36 +315,55 @@ export function CheckInSubmit() {
 }
 
 /** ゲージバー */
-function GaugeBar({ label, value, barRef, gradientFrom, gradientTo, trackColor, onPointerDown }: {
+function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, trackColor, onPointerDown, trailing }: {
   label: string
   value: number
+  ceiling?: number
   barRef: React.RefObject<HTMLDivElement | null>
   gradientFrom: string
   gradientTo: string
   trackColor: string
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
+  trailing?: React.ReactNode
 }) {
   return (
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1 gap-1">
         <span className="text-wabi-text-muted">{label}</span>
-        <span className="text-[10px] text-wabi-text-muted font-mono">{value}</span>
+        <div className="flex items-center gap-1">
+          {trailing}
+          <span className="text-[10px] text-wabi-text-muted font-mono">{value}</span>
+        </div>
       </div>
       <div
         ref={barRef}
         onPointerDown={onPointerDown}
-        className="relative h-3 rounded-full cursor-pointer touch-none"
+        className="relative h-4 rounded-full cursor-pointer touch-none"
         style={{ background: trackColor }}
       >
+        {/* 上限マーカー（体力の回復上限を視覚的に表示） */}
+        {ceiling != null && ceiling < 100 && (
+          <div
+            className="absolute inset-y-0 right-0 rounded-r-full bg-wabi-text/5"
+            style={{ left: `${ceiling}%` }}
+          />
+        )}
         <div
-          className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
+          className="absolute inset-y-0 left-0 rounded-full"
           style={{
             width: `${value}%`,
             background: `linear-gradient(90deg, ${gradientFrom}, ${gradientTo})`,
           }}
         />
+        {/* 上限の境界線 */}
+        {ceiling != null && ceiling < 100 && (
+          <div
+            className="absolute inset-y-0 w-px bg-wabi-text/15"
+            style={{ left: `${ceiling}%` }}
+          />
+        )}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm transition-all duration-150"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-sm"
           style={{
             left: `${value}%`,
             marginLeft: '-5px',

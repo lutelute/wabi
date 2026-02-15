@@ -1,8 +1,10 @@
 import { app, BrowserWindow, ipcMain, Menu, Notification, dialog } from 'electron'
 import path from 'path'
+import fs from 'fs'
+import crypto from 'crypto'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
-import type { Routine, ExecutionState } from '../src/types/routine'
+import type { Routine, ExecutionState, BackupData } from '../src/types/routine'
 
 interface StoreSchema {
   routines: Routine[]
@@ -15,6 +17,71 @@ const store = new Store<StoreSchema>({
     executions: {},
   },
 })
+
+// ── Backup Rotation ──
+let lastDataHash = ''
+
+function computeHash(data: unknown): string {
+  return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex')
+}
+
+function getStorePath(): string {
+  return (store as any).path as string
+}
+
+function getPrevPath(): string {
+  const p = getStorePath()
+  return p.replace(/\.json$/, '.prev.json')
+}
+
+function rotateBackup(): void {
+  try {
+    const currentData = { routines: store.get('routines'), executions: store.get('executions') }
+    const hash = computeHash(currentData)
+    if (hash === lastDataHash) return // 差分なし → スキップ
+
+    const storePath = getStorePath()
+    const prevPath = getPrevPath()
+    if (fs.existsSync(storePath)) {
+      fs.copyFileSync(storePath, prevPath)
+    }
+    lastDataHash = hash
+  } catch (e) {
+    console.error('[wabi] backup rotation failed:', e)
+  }
+}
+
+function restoreFromBackupIfNeeded(): void {
+  try {
+    const routines = store.get('routines')
+    const executions = store.get('executions')
+    // 空データ検出: ルーティンもexecutionsも空
+    const isEmpty = (!routines || routines.length === 0) &&
+                    (!executions || Object.keys(executions).length === 0)
+
+    if (!isEmpty) {
+      lastDataHash = computeHash({ routines, executions })
+      return
+    }
+
+    const prevPath = getPrevPath()
+    if (!fs.existsSync(prevPath)) return
+
+    const raw = fs.readFileSync(prevPath, 'utf-8')
+    const prev = JSON.parse(raw)
+    if (prev.routines && prev.routines.length > 0) {
+      store.set('routines', prev.routines)
+      console.log('[wabi] restored routines from backup')
+    }
+    if (prev.executions && Object.keys(prev.executions).length > 0) {
+      store.set('executions', prev.executions)
+      console.log('[wabi] restored executions from backup')
+    }
+    lastDataHash = computeHash({ routines: store.get('routines'), executions: store.get('executions') })
+  } catch (e) {
+    console.error('[wabi] restore from backup failed:', e)
+  }
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -48,6 +115,7 @@ ipcMain.handle('store:getRoutines', () => {
 })
 
 ipcMain.handle('store:saveRoutines', (_event, routines: Routine[]) => {
+  rotateBackup()
   store.set('routines', routines)
   return true
 })
@@ -58,6 +126,7 @@ ipcMain.handle('store:getExecution', (_event, key: string) => {
 })
 
 ipcMain.handle('store:saveExecution', (_event, key: string, state: ExecutionState) => {
+  rotateBackup()
   const executions = store.get('executions')
   executions[key] = state
   store.set('executions', executions)
@@ -121,6 +190,7 @@ ipcMain.handle('settings:get', () => {
 })
 
 ipcMain.handle('settings:save', (_event, settings: Record<string, unknown>) => {
+  rotateBackup()
   store.set('settings' as any, settings)
   return true
 })
@@ -129,6 +199,65 @@ ipcMain.handle('settings:save', (_event, settings: Record<string, unknown>) => {
 ipcMain.handle('store:clearExecutions', () => {
   store.set('executions', {})
   return true
+})
+
+// ── Backup Export / Import ──
+ipcMain.handle('backup:export', async () => {
+  try {
+    const backupData: BackupData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      routines: store.get('routines'),
+      executions: store.get('executions'),
+      settings: store.get('settings' as any) ?? {},
+    }
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+      title: 'バックアップをエクスポート',
+      defaultPath: `wabi-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (canceled || !filePath) return { success: false }
+    fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2), 'utf-8')
+    return { success: true, path: filePath }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('backup:import', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+      title: 'バックアップをインポート',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openFile'],
+    })
+    if (canceled || filePaths.length === 0) return { success: false }
+
+    const raw = fs.readFileSync(filePaths[0], 'utf-8')
+    const data = JSON.parse(raw) as BackupData
+
+    // バリデーション
+    if (!data.version || !data.routines || !data.executions) {
+      return { success: false, error: '無効なバックアップファイルです' }
+    }
+
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      title: 'バックアップの復元',
+      message: `${data.exportedAt.slice(0, 10)} のバックアップを復元しますか？\n現在のデータは上書きされます。`,
+      buttons: ['復元する', 'キャンセル'],
+      defaultId: 1,
+    })
+    if (response !== 0) return { success: false }
+
+    rotateBackup()
+    store.set('routines', data.routines)
+    store.set('executions', data.executions)
+    if (data.settings) store.set('settings' as any, data.settings)
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
 })
 
 // ── Auto Updater ──
@@ -170,6 +299,7 @@ ipcMain.on('updater:install', () => {
 })
 
 app.whenReady().then(() => {
+  restoreFromBackupIfNeeded()
   buildMenu()
   createWindow()
 

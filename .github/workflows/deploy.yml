@@ -28,7 +28,9 @@ jobs:
 
       - run: npx vite build --mode web
         env:
-          VITE_WEB_MODE: true
+          VITE_WEB_MODE: "true"
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

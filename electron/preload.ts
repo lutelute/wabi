@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('open-settings', callback)
   },
 
+  // Backup
+  exportBackup: () => ipcRenderer.invoke('backup:export'),
+  importBackup: () => ipcRenderer.invoke('backup:import'),
+
   // Auto-updater
   checkForUpdates: () => ipcRenderer.send('updater:check'),
   installUpdate: () => ipcRenderer.send('updater:install'),

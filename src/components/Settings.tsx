@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSettings } from '../contexts/SettingsContext'
 import { storage } from '../storage'
+import { getSupabase, isCloudEnabled } from '../sync/supabaseClient'
+import type { BackupData } from '../types/routine'
 
 interface Props {
   onClose: () => void
@@ -10,6 +12,9 @@ export function Settings({ onClose }: Props) {
   const { settings, updateSetting } = useSettings()
   const [clearing, setClearing] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<string>('')
+  const [backupStatus, setBackupStatus] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const isElectron = !!window.electronAPI
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -39,6 +44,73 @@ export function Settings({ onClose }: Props) {
     setClearing(true)
     await storage.clearExecutions()
     setClearing(false)
+    window.location.reload()
+  }
+
+  const handleExport = async () => {
+    setBackupStatus('')
+    if (isElectron) {
+      const result = await window.electronAPI.exportBackup()
+      setBackupStatus(result.success ? 'エクスポート完了' : 'キャンセルされました')
+    } else {
+      const data = storage.exportBackupWeb()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `wabi-backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setBackupStatus('エクスポート完了')
+    }
+  }
+
+  const handleImport = async () => {
+    setBackupStatus('')
+    if (isElectron) {
+      const result = await window.electronAPI.importBackup()
+      if (result.success) {
+        setBackupStatus('インポート完了。再読み込みします…')
+        setTimeout(() => window.location.reload(), 1000)
+      } else if (result.error) {
+        setBackupStatus(`エラー: ${result.error}`)
+      }
+    } else {
+      fileInputRef.current?.click()
+    }
+  }
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string) as BackupData
+        if (!data.version || !data.routines) {
+          setBackupStatus('無効なバックアップファイルです')
+          return
+        }
+        if (!confirm(`${data.exportedAt?.slice(0, 10) ?? '不明'} のバックアップを復元しますか？\n現在のデータは上書きされます。`)) return
+        const ok = storage.importBackupWeb(data)
+        if (ok) {
+          setBackupStatus('インポート完了。再読み込みします…')
+          setTimeout(() => window.location.reload(), 1000)
+        } else {
+          setBackupStatus('インポートに失敗しました')
+        }
+      } catch {
+        setBackupStatus('ファイルの読み込みに失敗しました')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const handleLogout = async () => {
+    const supabase = getSupabase()
+    if (!supabase) return
+    await supabase.auth.signOut()
     window.location.reload()
   }
 
@@ -195,6 +267,24 @@ export function Settings({ onClose }: Props) {
             </div>
           </Section>
 
+          {/* 概念ルーティン & リマインダー */}
+          <Section title="ガイド">
+            <div className="space-y-4">
+              <ToggleRow
+                label="概念ルーティン"
+                description="時間帯に応じたソフトな提案を表示"
+                value={settings.conceptRoutinesEnabled}
+                onChange={v => update('conceptRoutinesEnabled', v)}
+              />
+              <ToggleRow
+                label="リマインダー音"
+                description="リマインダー発火時にサウンド通知"
+                value={settings.reminderSoundEnabled}
+                onChange={v => update('reminderSoundEnabled', v)}
+              />
+            </div>
+          </Section>
+
           {/* データ */}
           <Section title="データ">
             <div className="space-y-3">
@@ -210,6 +300,51 @@ export function Settings({ onClose }: Props) {
               </p>
             </div>
           </Section>
+
+          {/* バックアップ */}
+          <Section title="バックアップ">
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleExport}
+                  className="px-3 py-1.5 text-xs bg-wabi-surface border border-wabi-border rounded-lg hover:bg-wabi-accent/10 cursor-pointer transition-colors"
+                >
+                  エクスポート
+                </button>
+                <button
+                  onClick={handleImport}
+                  className="px-3 py-1.5 text-xs bg-wabi-surface border border-wabi-border rounded-lg hover:bg-wabi-accent/10 cursor-pointer transition-colors"
+                >
+                  インポート
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileSelected}
+                  className="hidden"
+                />
+              </div>
+              {backupStatus && (
+                <p className="text-xs text-wabi-text-muted">{backupStatus}</p>
+              )}
+              <p className="text-xs text-wabi-text-muted">
+                全データ（ルーティン・実行履歴・設定）をJSONファイルとして保存・復元できます。
+              </p>
+            </div>
+          </Section>
+
+          {/* アカウント (Web版のみ) */}
+          {!isElectron && isCloudEnabled() && (
+            <Section title="アカウント">
+              <button
+                onClick={handleLogout}
+                className="text-sm text-wabi-timer hover:text-wabi-text cursor-pointer"
+              >
+                ログアウト
+              </button>
+            </Section>
+          )}
 
           {/* バージョン + アップデート */}
           <div className="pt-2 border-t border-wabi-border/50 space-y-2">

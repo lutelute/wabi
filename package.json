@@ -5,7 +5,9 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:web": "VITE_WEB_MODE=true vite --port 5177",
     "build": "tsc && vite build && electron-builder",
+    "build:web": "VITE_WEB_MODE=true tsc --noEmit && VITE_WEB_MODE=true vite build",
     "build:mac": "tsc && vite build && electron-builder --mac",
     "install:mac": "npm run build:mac && cp -R release/*/mac-arm64/wabi.app /Applications/ && echo '✓ /Applications/wabi.app にインストール完了'"
   },
@@ -13,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "electron-updater": "^6.6.2",
     "nanoid": "^5.1.6",
     "react": "^19.2.4",

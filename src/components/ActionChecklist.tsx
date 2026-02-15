@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useActionList } from '../contexts/ActionListContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useDay } from '../contexts/DayContext'
 import { MentalCheckDialog } from './MentalCheckDialog'
 import { MOOD_OPTIONS } from '../types/routine'
 import type { Mood, DailyAction } from '../types/routine'
@@ -10,12 +11,17 @@ const LONG_PRESS_MS = 1500
 export function ActionChecklist() {
   const {
     actions, checkedItems, toggleCheck, getWeight, updateWeight,
-    itemMoods, setItemMood, addMentalCompletion,
+    removeAction, renameAction,
+    itemMoods, itemComments, setItemMood, setItemComment, addMentalCompletion,
     timerState, startTimer, stopTimer,
   } = useActionList()
   const { settings } = useSettings()
+  const { markRestTaken } = useDay()
   const [mentalDialog, setMentalDialog] = useState<DailyAction | null>(null)
   const [showWeights, setShowWeights] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [commentingId, setCommentingId] = useState<string | null>(null)
   const weightMax = settings.weightMax || 5
 
   if (actions.length === 0) {
@@ -27,6 +33,11 @@ export function ActionChecklist() {
   }
 
   const doneCount = actions.filter(a => checkedItems[a.id]).length
+
+  const completeAction = (action: DailyAction) => {
+    toggleCheck(action.id)
+    if (action.isRest) markRestTaken()
+  }
 
   const handleCheck = (action: DailyAction) => {
     if (checkedItems[action.id]) {
@@ -41,7 +52,7 @@ export function ActionChecklist() {
       startTimer(action.id, action.duration)
       return
     }
-    toggleCheck(action.id)
+    completeAction(action)
   }
 
   const handleDirectComplete = (action: DailyAction) => {
@@ -49,7 +60,7 @@ export function ActionChecklist() {
       setMentalDialog(action)
       return
     }
-    toggleCheck(action.id)
+    completeAction(action)
   }
 
   const handleTimerComplete = (action: DailyAction) => {
@@ -57,7 +68,7 @@ export function ActionChecklist() {
     if (action.isMental) {
       setMentalDialog(action)
     } else {
-      toggleCheck(action.id)
+      completeAction(action)
     }
   }
 
@@ -66,7 +77,7 @@ export function ActionChecklist() {
     if (timerState?.running && timerState.itemId === mentalDialog.id) {
       stopTimer()
     }
-    toggleCheck(mentalDialog.id)
+    completeAction(mentalDialog)
     addMentalCompletion(mentalDialog.id, reflection)
     setMentalDialog(null)
   }
@@ -88,7 +99,7 @@ export function ActionChecklist() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-wabi-text-muted">
-          アクション <span className="font-mono">{doneCount}/{actions.length}</span>
+          侘び <span className="font-mono text-wabi-text-muted/50">{doneCount}/{actions.length}</span>
         </span>
         <button
           onClick={() => setShowWeights(v => !v)}
@@ -109,7 +120,12 @@ export function ActionChecklist() {
                 <div className={`flex items-center justify-between px-1 py-1 ${phaseComplete ? 'opacity-40' : ''}`}>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-medium text-wabi-text-muted">{group.phaseTitle}</span>
-                    <span className="text-[9px] text-wabi-text-muted/40">{group.routineName}</span>
+                    <span className="text-[9px] text-wabi-text-muted/40 relative">
+                      {group.routineName}
+                      {group.actions[0]?.sourceRoutineColor && (
+                        <span className="absolute left-0 right-0 bottom-0 h-[40%] rounded-sm" style={{ backgroundColor: group.actions[0].sourceRoutineColor, opacity: 0.18 }} />
+                      )}
+                    </span>
                   </div>
                   <span className="text-[10px] text-wabi-text-muted/50">{phaseDone}/{group.actions.length}</span>
                 </div>
@@ -123,7 +139,7 @@ export function ActionChecklist() {
                 return (
                   <div
                     key={action.id}
-                    className={`rounded-lg transition-colors ${
+                    className={`group/action rounded-lg transition-colors ${
                       isTimerActive
                         ? 'bg-wabi-surface border border-wabi-border'
                         : checked
@@ -160,22 +176,58 @@ export function ActionChecklist() {
                         </button>
                       )}
 
-                      {/* タイトル + ソースタグ */}
+                      {/* タイトル + ソース */}
                       <div className="flex-1 min-w-0">
-                        <span className={`text-xs ${checked ? 'line-through text-wabi-text-muted' : 'text-wabi-text'}`}>
-                          {action.title}
-                          {action.isMental && (
-                            <span className="ml-1.5 text-[9px] text-amber-600/70 bg-amber-500/10 px-1 py-px rounded">mental</span>
-                          )}
-                        </span>
-                        {!group.phaseTitle && (
-                          <span className="block text-[9px] text-wabi-text-muted/40 truncate">
-                            {action.sourceRoutineName} {'>'} {action.sourcePhaseTitle}
-                          </span>
+                        {editingId === action.id ? (
+                          <input
+                            autoFocus
+                            value={editTitle}
+                            onChange={e => setEditTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editTitle.trim()) renameAction(action.id, editTitle.trim())
+                              setEditingId(null)
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                                if (editTitle.trim()) renameAction(action.id, editTitle.trim())
+                                setEditingId(null)
+                              }
+                              if (e.key === 'Escape') setEditingId(null)
+                            }}
+                            className="text-xs text-wabi-text bg-transparent outline-none border-b border-wabi-accent w-full"
+                            onClick={e => e.stopPropagation()}
+                          />
+                        ) : (
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span
+                              className={`text-xs cursor-text ${checked ? 'line-through text-wabi-text-muted' : 'text-wabi-text'}`}
+                              onDoubleClick={() => {
+                                setEditingId(action.id)
+                                setEditTitle(action.title)
+                              }}
+                            >
+                              {action.title}
+                            </span>
+                            <span className="text-[8px] text-wabi-text-muted/30 truncate">
+                              <span className="relative">
+                                {action.sourceRoutineName}
+                                {action.sourceRoutineColor && (
+                                  <span className="absolute left-0 right-0 bottom-0 h-[40%] rounded-sm" style={{ backgroundColor: action.sourceRoutineColor, opacity: 0.18 }} />
+                                )}
+                              </span>
+                              {' > '}{action.sourcePhaseTitle}
+                            </span>
+                            {action.isMental && (
+                              <span className="text-[8px] text-amber-600/60 bg-amber-500/8 px-1 rounded">mental</span>
+                            )}
+                            {action.isRest && (
+                              <span className="text-[8px] text-indigo-500/60 bg-indigo-500/8 px-1 rounded">rest</span>
+                            )}
+                          </div>
                         )}
                       </div>
 
-                      {/* duration あり & 未完了 */}
+                      {/* duration あり & 未手放し */}
                       {action.duration && !checked && !isTimerActive && (
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[10px] text-wabi-text-muted/40 font-mono">{action.duration}分</span>
@@ -185,7 +237,7 @@ export function ActionChecklist() {
                               handleDirectComplete(action)
                             }}
                             className="text-[10px] text-wabi-text-muted/40 hover:text-wabi-check cursor-pointer px-1 py-0.5 rounded hover:bg-wabi-surface transition-colors"
-                            title="タイマーなしで完了"
+                            title="タイマーなしで手放す"
                           >
                             skip
                           </button>
@@ -207,6 +259,18 @@ export function ActionChecklist() {
                           <span className="text-[10px] text-wabi-text-muted w-3 text-center font-mono">{w}</span>
                         </div>
                       )}
+
+                      {/* 削除ボタン */}
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          removeAction(action.id)
+                        }}
+                        className="opacity-0 group-hover/action:opacity-100 shrink-0 text-wabi-text-muted/40 hover:text-wabi-timer text-xs cursor-pointer px-0.5 transition-opacity"
+                        title="削除"
+                      >
+                        ×
+                      </button>
                     </div>
 
                     {/* タイマー表示 */}
@@ -220,9 +284,9 @@ export function ActionChecklist() {
                       />
                     )}
 
-                    {/* 完了後: 気持ちボタン */}
+                    {/* 手放した後: 気持ちボタン */}
                     {checked && (
-                      <div className="flex gap-0.5 px-8 pb-1.5">
+                      <div className="flex gap-0.5 px-8 pb-1">
                         {MOOD_OPTIONS.map(({ value, label }) => (
                           <button
                             key={value}
@@ -236,6 +300,38 @@ export function ActionChecklist() {
                             {label}
                           </button>
                         ))}
+                      </div>
+                    )}
+
+                    {/* コメント欄 (コンパクト: クリックで展開) */}
+                    {commentingId === action.id ? (
+                      <div className="px-8 pb-1.5">
+                        <input
+                          autoFocus
+                          value={itemComments[action.id] ?? ''}
+                          onChange={e => setItemComment(action.id, e.target.value)}
+                          onBlur={() => setCommentingId(null)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) setCommentingId(null)
+                            if (e.key === 'Escape') setCommentingId(null)
+                          }}
+                          placeholder="ひとこと"
+                          className="w-full text-[10px] bg-transparent border-b border-wabi-accent/40 text-wabi-text-muted placeholder:text-wabi-text-muted/30 focus:outline-none py-0.5"
+                        />
+                      </div>
+                    ) : itemComments[action.id] ? (
+                      <div
+                        className="px-8 pb-1 cursor-text"
+                        onClick={() => setCommentingId(action.id)}
+                      >
+                        <span className="text-[10px] text-wabi-text-muted/50">{itemComments[action.id]}</span>
+                      </div>
+                    ) : (
+                      <div
+                        className="px-8 pb-0.5 opacity-0 group-hover/action:opacity-100 transition-opacity cursor-text"
+                        onClick={() => setCommentingId(action.id)}
+                      >
+                        <span className="text-[10px] text-wabi-text-muted/20">+ ひとこと</span>
                       </div>
                     )}
                   </div>
@@ -290,13 +386,13 @@ function TimerInline({ remaining, total, action, onComplete, onStop }: {
             中止
           </button>
           {action.isMental ? (
-            <LongPressButton label="完了" onComplete={onComplete} />
+            <LongPressButton label="手放す" onComplete={onComplete} />
           ) : (
             <button
               onClick={onComplete}
               className="text-[10px] text-wabi-check hover:text-wabi-accent cursor-pointer px-2 py-1 rounded border border-wabi-border hover:border-wabi-accent transition-colors"
             >
-              完了
+              手放す
             </button>
           )}
         </div>
@@ -343,7 +439,7 @@ function LongPressCheck({ onComplete }: { onComplete: () => void }) {
       onTouchEnd={stop}
       onTouchCancel={stop}
       className="shrink-0 cursor-pointer relative"
-      title="長押しで完了"
+      title="長押しで手放す"
     >
       <svg width="16" height="16" viewBox="0 0 16 16">
         <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-wabi-border" />
@@ -363,7 +459,7 @@ function LongPressCheck({ onComplete }: { onComplete: () => void }) {
   )
 }
 
-/** 長押し完了ボタン (テキスト) */
+/** 長押し手放すボタン (テキスト) */
 function LongPressButton({ label, onComplete }: { label: string; onComplete: () => void }) {
   const [progress, setProgress] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval>>(null)

@@ -3,7 +3,7 @@ import { useDay } from '../contexts/DayContext'
 import { MOOD_OPTIONS } from '../types/routine'
 import type { Mood, MoodEntry, CheckIn } from '../types/routine'
 
-const FEELING_TAGS = [
+const DEFAULT_FEELING_TAGS = [
   '疲れた', 'すっきり', '不安', '焦り', '充実', '眠い',
   '集中できた', '散漫', 'イライラ', 'リラックス', '達成感', '無気力',
 ]
@@ -30,7 +30,7 @@ function shiftMessage(log: MoodEntry[]): string | null {
 
 function buildCheckInText(checkIns: CheckIn[], moodLog: MoodEntry[], dailyNotes: string, date: string): string {
   const lines: string[] = []
-  lines.push(`# こころの記録 (${date})`)
+  lines.push(`# 寂びの記録 (${date})`)
   lines.push('')
 
   if (moodLog.length > 0) {
@@ -40,7 +40,7 @@ function buildCheckInText(checkIns: CheckIn[], moodLog: MoodEntry[], dailyNotes:
 
   for (const ci of checkIns) {
     lines.push(`## ${ci.time}`)
-    lines.push(`体力: ${ci.stamina}/100 | 心: ${ci.mental}/100`)
+    lines.push(`淀: ${ci.mental} | 波: ${ci.wave ?? '-'} | 体温: ${ci.bodyTemp ?? '-'} | 体力: ${ci.stamina}`)
     if (ci.tags.length > 0) {
       lines.push(`気持ち: ${ci.tags.map(t => `#${t}`).join(' ')}`)
     }
@@ -61,25 +61,49 @@ function buildCheckInText(checkIns: CheckIn[], moodLog: MoodEntry[], dailyNotes:
 interface LevelEntry { level: number; time: string }
 
 export function CheckInSubmit() {
-  const { checkIns, addCheckIn, staminaLog, mentalLog, moodLog, dailyNotes, addMood } = useDay()
+  const { checkIns, addCheckIn, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, addMood, restTaken } = useDay()
   const [comment, setComment] = useState('')
   const [mental, setMental] = useState(50)
+  const [wave, setWave] = useState(30)
+  const [bodyTemp, setBodyTemp] = useState(50)
   const [tags, setTags] = useState<string[]>([])
+  const [customFeelingTags, setCustomFeelingTags] = useState<string[]>([])
+  const [newTagInput, setNewTagInput] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [copied, setCopied] = useState(false)
   const staminaBarRef = useRef<HTMLDivElement>(null)
   const mentalBarRef = useRef<HTMLDivElement>(null)
+  const waveBarRef = useRef<HTMLDivElement>(null)
+  const bodyTempBarRef = useRef<HTMLDivElement>(null)
 
-  // 体力の上限: 最後のチェックイン値、なければ100（寝て回復した状態）
+  // 体力の上限: 最後のチェックイン値、なければ100
   const staminaCeiling = checkIns.length > 0 ? checkIns[checkIns.length - 1].stamina : 100
   const [stamina, setStaminaRaw] = useState(staminaCeiling)
   const [resting, setResting] = useState(false)
+
+  // @rest アイテム完了で自動的に休息モードに
+  useEffect(() => {
+    if (restTaken && !resting) {
+      setResting(true)
+      setStaminaRaw(Math.min(staminaCeiling + 30, 100))
+    }
+  }, [restTaken])
 
   // チェックイン後に上限が変わったらスライダーも合わせる
   useEffect(() => {
     setStaminaRaw(staminaCeiling)
     setResting(false)
   }, [staminaCeiling])
+
+  // 前回チェックインの値を初期値に
+  useEffect(() => {
+    if (checkIns.length > 0) {
+      const last = checkIns[checkIns.length - 1]
+      setMental(last.mental)
+      setWave(last.wave ?? 30)
+      setBodyTemp(last.bodyTemp ?? 50)
+    }
+  }, [checkIns.length])
 
   // 体力は上限を超えないようにキャップ（休息中は解除）
   const setStamina = useCallback((v: number) => {
@@ -118,12 +142,12 @@ export function CheckInSubmit() {
   }, [])
 
   const handleSubmit = useCallback(() => {
-    addCheckIn(stamina, mental, tags, comment)
+    addCheckIn(stamina, mental, wave, bodyTemp, tags, comment)
     setTags([])
     setComment('')
     setSubmitted(true)
     setTimeout(() => setSubmitted(false), 1500)
-  }, [stamina, mental, tags, comment, addCheckIn])
+  }, [stamina, mental, wave, bodyTemp, tags, comment, addCheckIn])
 
   const handleCopy = useCallback(() => {
     const date = new Date().toISOString().slice(0, 10)
@@ -136,45 +160,79 @@ export function CheckInSubmit() {
 
   return (
     <div className="px-1">
-      <p className="text-xs text-wabi-text-muted mb-3">チェックイン</p>
+      <p className="text-xs text-wabi-text-muted mb-3">寂び</p>
 
       <div className="bg-wabi-surface rounded-lg border border-wabi-border/50 p-4 space-y-4 text-xs">
-        {/* 体力・心バー (1行) */}
-        <div className="flex gap-3">
-          <GaugeBar
-            label="体力"
-            value={stamina}
-            ceiling={resting ? undefined : staminaCeiling}
-            barRef={staminaBarRef}
-            gradientFrom="#059669"
-            gradientTo="#34d399"
-            trackColor="rgba(5,150,105,0.1)"
-            onPointerDown={e => handleBarPointerDown(e, staminaBarRef, setStamina)}
-            trailing={
-              <button
-                onClick={() => {
-                  setResting(v => !v)
-                  if (!resting) setStaminaRaw(Math.min(staminaCeiling + 30, 100))
-                }}
-                className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-colors whitespace-nowrap ${
-                  resting
-                    ? 'bg-indigo-500/15 text-indigo-400'
-                    : 'text-wabi-text-muted/40 hover:text-wabi-text-muted hover:bg-wabi-bg'
-                }`}
-              >
-                {resting ? '休息中' : '休息'}
-              </button>
-            }
-          />
-          <GaugeBar
-            label="心"
-            value={mental}
-            barRef={mentalBarRef}
-            gradientFrom="#0284c7"
-            gradientTo="#38bdf8"
-            trackColor="rgba(2,132,199,0.1)"
-            onPointerDown={e => handleBarPointerDown(e, mentalBarRef, setMental)}
-          />
+        {/* 体(左) + 心(右) 2カラム縦並び */}
+        <div className="flex gap-4">
+          {/* 体 */}
+          <div className="flex-1 min-w-0 space-y-3">
+            <span className="text-[10px] text-wabi-text-muted/40 block">体</span>
+            <GaugeBar
+              label="体温"
+              value={bodyTemp}
+              barRef={bodyTempBarRef}
+              gradientFrom="#c4786a"
+              gradientTo="#d8a090"
+              trackColor="rgba(196,120,106,0.1)"
+              onPointerDown={e => handleBarPointerDown(e, bodyTempBarRef, setBodyTemp)}
+              labelLeft="冷"
+              labelRight="熱"
+            />
+            <GaugeBar
+              label="体力"
+              value={stamina}
+              ceiling={resting ? undefined : staminaCeiling}
+              barRef={staminaBarRef}
+              gradientFrom="#8aaa7a"
+              gradientTo="#a8c89a"
+              trackColor="rgba(138,170,122,0.1)"
+              onPointerDown={e => handleBarPointerDown(e, staminaBarRef, setStamina)}
+              labelLeft="満"
+              labelRight="尽"
+              trailing={
+                <button
+                  onClick={() => {
+                    setResting(v => !v)
+                    if (!resting) setStaminaRaw(Math.min(staminaCeiling + 30, 100))
+                  }}
+                  className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-colors whitespace-nowrap ${
+                    resting
+                      ? 'bg-indigo-500/15 text-indigo-400'
+                      : 'text-wabi-text-muted/40 hover:text-wabi-text-muted hover:bg-wabi-bg'
+                  }`}
+                >
+                  {resting ? '休息中' : '休息'}
+                </button>
+              }
+            />
+          </div>
+          {/* 心 */}
+          <div className="flex-1 min-w-0 space-y-3">
+            <span className="text-[10px] text-wabi-text-muted/40 block">心</span>
+            <GaugeBar
+              label="淀"
+              value={mental}
+              barRef={mentalBarRef}
+              gradientFrom="#8a9298"
+              gradientTo="#b0bcc2"
+              trackColor="rgba(138,146,152,0.1)"
+              onPointerDown={e => handleBarPointerDown(e, mentalBarRef, setMental)}
+              labelLeft="濁"
+              labelRight="澄"
+            />
+            <GaugeBar
+              label="波"
+              value={wave}
+              barRef={waveBarRef}
+              gradientFrom="#5a8a9a"
+              gradientTo="#7eb5c8"
+              trackColor="rgba(90,138,154,0.1)"
+              onPointerDown={e => handleBarPointerDown(e, waveBarRef, setWave)}
+              labelLeft="凪"
+              labelRight="荒"
+            />
+          </div>
         </div>
 
         {/* 気分 */}
@@ -214,7 +272,7 @@ export function CheckInSubmit() {
         <div>
           <span className="text-wabi-text-muted block mb-1.5">気持ち</span>
           <div className="flex flex-wrap gap-1.5">
-            {FEELING_TAGS.map(tag => (
+            {[...DEFAULT_FEELING_TAGS, ...customFeelingTags].map(tag => (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
@@ -227,6 +285,25 @@ export function CheckInSubmit() {
                 {tag}
               </button>
             ))}
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                const t = newTagInput.trim()
+                if (t && !DEFAULT_FEELING_TAGS.includes(t) && !customFeelingTags.includes(t)) {
+                  setCustomFeelingTags(prev => [...prev, t])
+                  setTags(prev => [...prev, t])
+                }
+                setNewTagInput('')
+              }}
+              className="inline-flex"
+            >
+              <input
+                value={newTagInput}
+                onChange={e => setNewTagInput(e.target.value)}
+                placeholder="+ 追加"
+                className="w-16 px-2 py-0.5 rounded-full text-[10px] bg-wabi-bg text-wabi-text placeholder:text-wabi-text-muted/30 border border-transparent focus:border-wabi-border/50 focus:w-24 transition-all duration-200 focus:outline-none"
+              />
+            </form>
           </div>
         </div>
 
@@ -251,21 +328,39 @@ export function CheckInSubmit() {
         </button>
 
         {/* 時系列グラフ */}
-        {(staminaLog.length >= 2 || mentalLog.length >= 2) && (
+        {(mentalLog.length >= 2 || waveLog.length >= 2 || bodyTempLog.length >= 2 || staminaLog.length >= 2) && (
           <div className="pt-2 border-t border-wabi-border/30">
-            <div className="flex gap-3">
-              {staminaLog.length >= 2 && (
-                <div className="flex-1 min-w-0">
-                  <span className="text-[10px] text-wabi-text-muted/50">体力の推移</span>
-                  <TimeGraph log={staminaLog} gradientFrom="#059669" gradientTo="#34d399" />
-                </div>
-              )}
-              {mentalLog.length >= 2 && (
-                <div className="flex-1 min-w-0">
-                  <span className="text-[10px] text-wabi-text-muted/50">心の推移</span>
-                  <TimeGraph log={mentalLog} gradientFrom="#0284c7" gradientTo="#38bdf8" />
-                </div>
-              )}
+            <div className="flex gap-4">
+              {/* 体の推移 (左) */}
+              <div className="flex-1 min-w-0 space-y-1">
+                {bodyTempLog.length >= 2 && (
+                  <div>
+                    <span className="text-[10px] text-wabi-text-muted/50">体温</span>
+                    <TimeGraph log={bodyTempLog} gradientFrom="#c4786a" gradientTo="#d8a090" />
+                  </div>
+                )}
+                {staminaLog.length >= 2 && (
+                  <div>
+                    <span className="text-[10px] text-wabi-text-muted/50">体力</span>
+                    <TimeGraph log={staminaLog} gradientFrom="#8aaa7a" gradientTo="#a8c89a" />
+                  </div>
+                )}
+              </div>
+              {/* 心の推移 (右) */}
+              <div className="flex-1 min-w-0 space-y-1">
+                {mentalLog.length >= 2 && (
+                  <div>
+                    <span className="text-[10px] text-wabi-text-muted/50">淀</span>
+                    <TimeGraph log={mentalLog} gradientFrom="#8a9298" gradientTo="#b0bcc2" />
+                  </div>
+                )}
+                {waveLog.length >= 2 && (
+                  <div>
+                    <span className="text-[10px] text-wabi-text-muted/50">波</span>
+                    <TimeGraph log={waveLog} gradientFrom="#5a8a9a" gradientTo="#7eb5c8" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -273,13 +368,15 @@ export function CheckInSubmit() {
         {/* 過去のチェックイン */}
         {checkIns.length > 0 && (
           <div className="pt-2 border-t border-wabi-border/30 space-y-2">
-            <p className="text-[10px] text-wabi-text-muted/50">今日のチェックイン ({checkIns.length})</p>
+            <p className="text-[10px] text-wabi-text-muted/50">今日の寂び ({checkIns.length})</p>
             {checkIns.map((ci, i) => (
               <div key={i} className="bg-wabi-bg rounded-md px-3 py-2 space-y-1">
-                <div className="flex items-center gap-3 text-[10px] text-wabi-text-muted">
+                <div className="flex items-center gap-2 text-[10px] text-wabi-text-muted flex-wrap">
                   <span className="font-mono opacity-50">{ci.time}</span>
-                  <span className="text-emerald-600">体力 {ci.stamina}</span>
-                  <span className="text-sky-500">心 {ci.mental}</span>
+                  <span style={{ color: '#c4786a' }}>体温 {ci.bodyTemp ?? '-'}</span>
+                  <span style={{ color: '#8aaa7a' }}>体力 {ci.stamina}</span>
+                  <span style={{ color: '#8a9298' }}>淀 {ci.mental}</span>
+                  <span style={{ color: '#5a8a9a' }}>波 {ci.wave ?? '-'}</span>
                 </div>
                 {ci.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">
@@ -315,7 +412,7 @@ export function CheckInSubmit() {
 }
 
 /** ゲージバー */
-function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, trackColor, onPointerDown, trailing }: {
+function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, trackColor, onPointerDown, trailing, labelLeft, labelRight }: {
   label: string
   value: number
   ceiling?: number
@@ -325,6 +422,8 @@ function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, tra
   trackColor: string
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
   trailing?: React.ReactNode
+  labelLeft?: string
+  labelRight?: string
 }) {
   return (
     <div className="flex-1 min-w-0">
@@ -341,7 +440,6 @@ function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, tra
         className="relative h-4 rounded-full cursor-pointer touch-none"
         style={{ background: trackColor }}
       >
-        {/* 上限マーカー（体力の回復上限を視覚的に表示） */}
         {ceiling != null && ceiling < 100 && (
           <div
             className="absolute inset-y-0 right-0 rounded-r-full bg-wabi-text/5"
@@ -355,7 +453,6 @@ function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, tra
             background: `linear-gradient(90deg, ${gradientFrom}, ${gradientTo})`,
           }}
         />
-        {/* 上限の境界線 */}
         {ceiling != null && ceiling < 100 && (
           <div
             className="absolute inset-y-0 w-px bg-wabi-text/15"
@@ -371,11 +468,17 @@ function GaugeBar({ label, value, ceiling, barRef, gradientFrom, gradientTo, tra
           }}
         />
       </div>
+      {(labelLeft || labelRight) && (
+        <div className="flex justify-between mt-0.5">
+          <span className="text-[9px] text-wabi-text-muted/40">{labelLeft}</span>
+          <span className="text-[9px] text-wabi-text-muted/40">{labelRight}</span>
+        </div>
+      )}
     </div>
   )
 }
 
-/** 時系列グラフ (SelfGaugeから移植) */
+/** 時系列グラフ */
 function TimeGraph({ log, gradientFrom, gradientTo }: {
   log: LevelEntry[]
   gradientFrom: string
@@ -411,7 +514,6 @@ function TimeGraph({ log, gradientFrom, gradientTo }: {
     const tMax = times[times.length - 1]
     const tRange = Math.max(tMax - tMin, 1)
 
-    // 水平目盛り線
     ctx.strokeStyle = 'rgba(138,132,128,0.08)'
     ctx.lineWidth = dpr
     for (const lv of [25, 50, 75]) {
@@ -427,7 +529,6 @@ function TimeGraph({ log, gradientFrom, gradientTo }: {
       y: pad.top + plotH * (1 - e.level / 100),
     }))
 
-    // エリア塗り
     const gradient = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom)
     gradient.addColorStop(0, gradientFrom + '30')
     gradient.addColorStop(1, gradientFrom + '05')
@@ -439,7 +540,6 @@ function TimeGraph({ log, gradientFrom, gradientTo }: {
     ctx.fillStyle = gradient
     ctx.fill()
 
-    // 線
     ctx.beginPath()
     for (let i = 0; i < points.length; i++) {
       if (i === 0) ctx.moveTo(points[i].x, points[i].y)
@@ -450,7 +550,6 @@ function TimeGraph({ log, gradientFrom, gradientTo }: {
     ctx.lineJoin = 'round'
     ctx.stroke()
 
-    // ドット
     for (const p of points) {
       ctx.beginPath()
       ctx.arc(p.x, p.y, 2.5 * dpr, 0, Math.PI * 2)
@@ -461,7 +560,6 @@ function TimeGraph({ log, gradientFrom, gradientTo }: {
       ctx.stroke()
     }
 
-    // 時刻ラベル
     ctx.fillStyle = 'rgba(138,132,128,0.4)'
     ctx.font = `${8 * dpr}px system-ui, sans-serif`
     ctx.textAlign = 'left'

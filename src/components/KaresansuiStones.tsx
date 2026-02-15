@@ -385,6 +385,13 @@ export function KaresansuiStones() {
         className="w-full"
         style={{ height: '260px' }}
       />
+      {progress.total > 0 && (
+        <div className="flex justify-center mt-1">
+          <span className="text-[10px] text-wabi-text-muted/40 font-mono">
+            獲得 {progress.energy}/{progress.capacity}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

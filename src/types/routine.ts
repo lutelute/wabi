@@ -5,6 +5,7 @@ export interface RoutineItem {
   duration: number | null   // 分単位 (10 = 10min)
   weight: number            // 重み (1〜5, デフォルト1)
   isMental: boolean         // @mental タグ付き
+  isRest: boolean           // @rest タグ付き（体力回復）
   rawLine: string           // 元のテキスト行
 }
 
@@ -14,11 +15,26 @@ export interface RoutinePhase {
   items: RoutineItem[]
 }
 
+export const ROUTINE_COLORS = [
+  { id: 'none', value: '' },
+  { id: 'warm', value: '#e8c8a0' },
+  { id: 'peach', value: '#e8b4a0' },
+  { id: 'rose', value: '#dca0b0' },
+  { id: 'lavender', value: '#c0a8d4' },
+  { id: 'sky', value: '#a0c4dc' },
+  { id: 'mint', value: '#a0d4c0' },
+  { id: 'sage', value: '#b4ccac' },
+  { id: 'sand', value: '#d4c8a8' },
+  { id: 'stone', value: '#b8b0a8' },
+] as const
+
 export interface Routine {
   id: string
   name: string              // "朝のルーティン"
   text: string              // Markdownテキスト (source of truth)
   phases: RoutinePhase[]    // textから派生
+  color?: string            // ルーティンカラー (hex)
+  memo?: string             // ルーティンメモ
   createdAt: string
   updatedAt: string
 }
@@ -47,8 +63,10 @@ export interface MoodEntry {
 
 export interface CheckIn {
   time: string              // "14:32"
-  stamina: number           // 0-100
-  mental: number            // 0-100
+  stamina: number           // 0-100 (体力: 満↔尽)
+  mental: number            // 0-100 (心: 沈む↔浮く)
+  wave: number              // 0-100 (波: 凪↔荒)
+  bodyTemp: number          // 0-100 (体温: 冷↔熱)
   tags: string[]            // 気持ちタグ
   comment: string           // 自由コメント
 }
@@ -112,11 +130,13 @@ export interface DailyAction {
   sourceRoutineId: string       // 元のルーティンID
   sourceRoutineName: string     // "朝のルーティン"
   sourcePhaseTitle: string      // "仕事の調整"
+  sourceRoutineColor?: string   // ルーティンカラー (hex)
   sourceItemId: string          // 元のRoutineItem.id
   title: string                 // "ストレッチ"
   duration: number | null
   weight: number
   isMental: boolean
+  isRest: boolean               // @rest: 体力回復アイテム
   customTags: string[]          // ユーザー追加タグ
   addedAt: string               // ISO string
 }
@@ -128,6 +148,7 @@ export interface DailyActionState {
   itemWeights: Record<string, number>    // title → weight
   timerState: TimerState | null
   itemMoods: Record<string, Mood>
+  itemComments: Record<string, string>  // actionId → コメント
   mentalCompletions: MentalCompletion[]
   declined: string              // 今日やらないと決めたこと
   dismissedConcepts: string[]   // dismiss済み概念ルーティンID

@@ -20,10 +20,14 @@ export interface DayState {
   date: string
   staminaLog: LevelEntry[]
   mentalLog: LevelEntry[]
+  waveLog: LevelEntry[]
+  bodyTempLog: LevelEntry[]
   moodLog: MoodEntry[]
   dailyNotes: string
   customConcepts: string[]
   checkIns: CheckIn[]
+  restTaken: boolean
+  closedAt?: string
   /** @deprecated 旧フィールド。ロード時に dailyNotes へマイグレーション */
   moodNote?: string
 }
@@ -32,16 +36,22 @@ interface DayContextValue {
   date: string
   staminaLog: LevelEntry[]
   mentalLog: LevelEntry[]
+  waveLog: LevelEntry[]
+  bodyTempLog: LevelEntry[]
   moodLog: MoodEntry[]
   dailyNotes: string
   customConcepts: string[]
   checkIns: CheckIn[]
+  restTaken: boolean
+  closedAt: string | undefined
   addStamina: (level: number) => void
   addMental: (level: number) => void
   addMood: (mood: Mood) => void
   setDailyNotes: (note: string) => void
   addCustomConcept: (text: string) => void
-  addCheckIn: (stamina: number, mental: number, tags: string[], comment: string) => void
+  addCheckIn: (stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string) => void
+  markRestTaken: () => void
+  closeDay: () => void
 }
 
 const DayContext = createContext<DayContextValue | null>(null)
@@ -50,10 +60,14 @@ export function DayProvider({ children }: { children: ReactNode }) {
   const [date, setDate] = useState(todayString)
   const [staminaLog, setStaminaLog] = useState<LevelEntry[]>([])
   const [mentalLog, setMentalLog] = useState<LevelEntry[]>([])
+  const [waveLog, setWaveLog] = useState<LevelEntry[]>([])
+  const [bodyTempLog, setBodyTempLog] = useState<LevelEntry[]>([])
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([])
   const [dailyNotes, setDailyNotes] = useState('')
   const [customConcepts, setCustomConcepts] = useState<string[]>([])
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
+  const [restTaken, setRestTaken] = useState(false)
+  const [closedAt, setClosedAt] = useState<string | undefined>(undefined)
   const [loaded, setLoaded] = useState(false)
 
   // 日付チェック
@@ -63,9 +77,10 @@ export function DayProvider({ children }: { children: ReactNode }) {
       if (now !== date) {
         setDate(now)
         setStaminaLog([]); setMentalLog([])
+        setWaveLog([]); setBodyTempLog([])
         setMoodLog([]); setDailyNotes('')
         setCustomConcepts([])
-        setCheckIns([])
+        setCheckIns([]); setRestTaken(false); setClosedAt(undefined)
         setLoaded(false)
       }
     }, 30_000)
@@ -80,16 +95,20 @@ export function DayProvider({ children }: { children: ReactNode }) {
       if (saved) {
         setStaminaLog(saved.staminaLog ?? [])
         setMentalLog(saved.mentalLog ?? [])
+        setWaveLog(saved.waveLog ?? [])
+        setBodyTempLog(saved.bodyTempLog ?? [])
         setMoodLog(saved.moodLog ?? [])
-        // マイグレーション: 旧 moodNote → dailyNotes
         setDailyNotes(saved.dailyNotes ?? (saved as any).moodNote ?? '')
         setCustomConcepts(saved.customConcepts ?? [])
         setCheckIns(saved.checkIns ?? [])
+        setRestTaken(saved.restTaken ?? false)
+        setClosedAt(saved.closedAt)
       } else {
         setStaminaLog([]); setMentalLog([])
+        setWaveLog([]); setBodyTempLog([])
         setMoodLog([]); setDailyNotes('')
         setCustomConcepts([])
-        setCheckIns([])
+        setCheckIns([]); setRestTaken(false); setClosedAt(undefined)
       }
       setLoaded(true)
     })
@@ -100,10 +119,11 @@ export function DayProvider({ children }: { children: ReactNode }) {
     if (!loaded) return
     const key = `day:${date}`
     const state: DayState = {
-      date, staminaLog, mentalLog, moodLog, dailyNotes, customConcepts, checkIns,
+      date, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, customConcepts, checkIns, restTaken,
+      ...(closedAt ? { closedAt } : {}),
     }
     storage.saveDayState(key, state)
-  }, [staminaLog, mentalLog, moodLog, dailyNotes, customConcepts, checkIns, date, loaded])
+  }, [staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, customConcepts, checkIns, restTaken, closedAt, date, loaded])
 
   const addStamina = useCallback((level: number) => {
     setStaminaLog(prev => [...prev, { level, time: nowTime() }])
@@ -114,12 +134,16 @@ export function DayProvider({ children }: { children: ReactNode }) {
   const addMood = useCallback((mood: Mood) => {
     setMoodLog(prev => [...prev, { mood, time: nowTime() }])
   }, [])
-  const addCheckIn = useCallback((stamina: number, mental: number, tags: string[], comment: string) => {
+  const addCheckIn = useCallback((stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string) => {
     const time = nowTime()
-    setCheckIns(prev => [...prev, { time, stamina, mental, tags, comment }])
+    setCheckIns(prev => [...prev, { time, stamina, mental, wave, bodyTemp, tags, comment }])
     setStaminaLog(prev => [...prev, { level: stamina, time }])
     setMentalLog(prev => [...prev, { level: mental, time }])
+    setWaveLog(prev => [...prev, { level: wave, time }])
+    setBodyTempLog(prev => [...prev, { level: bodyTemp, time }])
   }, [])
+  const markRestTaken = useCallback(() => setRestTaken(true), [])
+  const closeDay = useCallback(() => setClosedAt(new Date().toISOString()), [])
   const addCustomConcept = useCallback((text: string) => {
     const trimmed = text.trim()
     if (trimmed) setCustomConcepts(prev => [...prev, trimmed])
@@ -127,8 +151,8 @@ export function DayProvider({ children }: { children: ReactNode }) {
 
   return (
     <DayContext.Provider value={{
-      date, staminaLog, mentalLog, moodLog, dailyNotes, customConcepts, checkIns,
-      addStamina, addMental, addMood, setDailyNotes, addCustomConcept, addCheckIn,
+      date, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, customConcepts, checkIns, restTaken, closedAt,
+      addStamina, addMental, addMood, setDailyNotes, addCustomConcept, addCheckIn, markRestTaken, closeDay,
     }}>
       {children}
     </DayContext.Provider>

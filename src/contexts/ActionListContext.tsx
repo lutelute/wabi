@@ -26,11 +26,14 @@ interface ActionListContextValue {
   actions: DailyAction[]
   addAction: (item: RoutineItem, routine: Routine, phase: RoutinePhase) => void
   removeAction: (actionId: string) => void
+  renameAction: (actionId: string, title: string) => void
   isItemAdded: (sourceItemId: string) => boolean
+  getItemCount: (sourceItemId: string) => number
   checkedItems: Record<string, boolean>
   itemWeights: Record<string, number>
   timerState: TimerState | null
   itemMoods: Record<string, Mood>
+  itemComments: Record<string, string>
   mentalCompletions: MentalCompletion[]
   declined: string
   dismissedConcepts: string[]
@@ -40,6 +43,7 @@ interface ActionListContextValue {
   startTimer: (actionId: string, durationMin: number) => void
   stopTimer: () => void
   setItemMood: (actionId: string, mood: Mood) => void
+  setItemComment: (actionId: string, comment: string) => void
   addMentalCompletion: (actionId: string, reflection: string) => void
   updateDeclined: (text: string) => void
   dismissConcept: (conceptId: string) => void
@@ -54,6 +58,7 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
   const [itemWeights, setItemWeights] = useState<Record<string, number>>({})
   const [timerState, setTimerState] = useState<TimerState | null>(null)
   const [itemMoods, setItemMoods] = useState<Record<string, Mood>>({})
+  const [itemComments, setItemComments] = useState<Record<string, string>>({})
   const [mentalCompletions, setMentalCompletions] = useState<MentalCompletion[]>([])
   const [declined, setDeclined] = useState('')
   const [dismissedConcepts, setDismissedConcepts] = useState<string[]>([])
@@ -67,7 +72,7 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
       if (now !== date) {
         setDate(now)
         setActions([]); setCheckedItems({}); setItemWeights({})
-        setTimerState(null); setItemMoods({}); setMentalCompletions([])
+        setTimerState(null); setItemMoods({}); setItemComments({}); setMentalCompletions([])
         setDeclined(''); setDismissedConcepts([])
         setLoaded(false)
       }
@@ -85,12 +90,13 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
         setItemWeights(saved.itemWeights ?? {})
         setTimerState(saved.timerState ?? null)
         setItemMoods(saved.itemMoods ?? {})
+        setItemComments((saved as any).itemComments ?? {})
         setMentalCompletions(saved.mentalCompletions ?? [])
         setDeclined(saved.declined ?? '')
         setDismissedConcepts(saved.dismissedConcepts ?? [])
       } else {
         setActions([]); setCheckedItems({}); setItemWeights({})
-        setTimerState(null); setItemMoods({}); setMentalCompletions([])
+        setTimerState(null); setItemMoods({}); setItemComments({}); setMentalCompletions([])
         setDeclined(''); setDismissedConcepts([])
       }
       setLoaded(true)
@@ -105,13 +111,13 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => {
       const state: DailyActionState = {
         date, actions, checkedItems, itemWeights,
-        timerState, itemMoods, mentalCompletions,
+        timerState, itemMoods, itemComments, mentalCompletions,
         declined, dismissedConcepts,
       }
       storage.saveActionState(date, state)
     }, 300)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-  }, [actions, checkedItems, itemWeights, timerState, itemMoods, mentalCompletions, declined, dismissedConcepts, date, loaded])
+  }, [actions, checkedItems, itemWeights, timerState, itemMoods, itemComments, mentalCompletions, declined, dismissedConcepts, date, loaded])
 
   // タイマー
   useEffect(() => {
@@ -127,30 +133,31 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval)
   }, [timerState?.running])
 
-  // sourceItemId → actionId のルックアップ用
-  const sourceItemIds = useMemo(() => {
-    const set = new Set<string>()
-    for (const a of actions) set.add(a.sourceItemId)
-    return set
+  // sourceItemId → 追加数のルックアップ用
+  const sourceItemCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const a of actions) map.set(a.sourceItemId, (map.get(a.sourceItemId) || 0) + 1)
+    return map
   }, [actions])
 
   const addAction = useCallback((item: RoutineItem, routine: Routine, phase: RoutinePhase) => {
     setActions(prev => {
-      if (prev.some(a => a.sourceItemId === item.id)) return prev
       const action: DailyAction = {
         id: nanoid(),
         sourceRoutineId: routine.id,
         sourceRoutineName: routine.name,
         sourcePhaseTitle: phase.title,
+        sourceRoutineColor: routine.color,
         sourceItemId: item.id,
         title: item.title,
         duration: item.duration,
         weight: item.weight,
         isMental: item.isMental,
+        isRest: item.isRest ?? false,
         customTags: [],
         addedAt: new Date().toISOString(),
       }
-      return [...prev, action]
+      return [action, ...prev]
     })
   }, [])
 
@@ -160,9 +167,17 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
     setItemMoods(prev => { const next = { ...prev }; delete next[actionId]; return next })
   }, [])
 
+  const renameAction = useCallback((actionId: string, title: string) => {
+    setActions(prev => prev.map(a => a.id === actionId ? { ...a, title } : a))
+  }, [])
+
   const isItemAdded = useCallback((sourceItemId: string) => {
-    return sourceItemIds.has(sourceItemId)
-  }, [sourceItemIds])
+    return (sourceItemCounts.get(sourceItemId) || 0) > 0
+  }, [sourceItemCounts])
+
+  const getItemCount = useCallback((sourceItemId: string) => {
+    return sourceItemCounts.get(sourceItemId) || 0
+  }, [sourceItemCounts])
 
   const toggleCheck = useCallback((actionId: string) => {
     setCheckedItems(prev => ({ ...prev, [actionId]: !prev[actionId] }))
@@ -178,6 +193,9 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
   const stopTimer = useCallback(() => setTimerState(null), [])
   const setItemMood = useCallback((id: string, mood: Mood) => {
     setItemMoods(prev => ({ ...prev, [id]: mood }))
+  }, [])
+  const setItemComment = useCallback((id: string, comment: string) => {
+    setItemComments(prev => comment ? { ...prev, [id]: comment } : (() => { const next = { ...prev }; delete next[id]; return next })())
   }, [])
   const addMentalCompletionCb = useCallback((actionId: string, reflection: string) => {
     setMentalCompletions(prev => [...prev, { itemId: actionId, reflection, completedAt: new Date().toISOString() }])
@@ -202,11 +220,11 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
 
   return (
     <ActionListContext.Provider value={{
-      actions, addAction, removeAction, isItemAdded,
-      checkedItems, itemWeights, timerState, itemMoods, mentalCompletions,
+      actions, addAction, removeAction, renameAction, isItemAdded, getItemCount,
+      checkedItems, itemWeights, timerState, itemMoods, itemComments, mentalCompletions,
       declined, dismissedConcepts,
       toggleCheck, updateWeight, getWeight, startTimer, stopTimer,
-      setItemMood, addMentalCompletion: addMentalCompletionCb,
+      setItemMood, setItemComment, addMentalCompletion: addMentalCompletionCb,
       updateDeclined, dismissConcept, progress,
     }}>
       {children}

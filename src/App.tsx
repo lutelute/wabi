@@ -9,11 +9,12 @@ import { ModeToggle } from './components/ModeToggle'
 import { RoutineEditor } from './components/RoutineEditor'
 import { ActionChecklist } from './components/ActionChecklist'
 import { NowFocus } from './components/NowFocus'
-import { EnergyGauge } from './components/EnergyGauge'
 import { KaresansuiStones } from './components/KaresansuiStones'
 import { CheckInSubmit } from './components/CheckInSubmit'
 import { ReminderBar } from './components/ReminderBar'
 import { DailyNote } from './components/DailyNote'
+import { DayClosing } from './components/DayClosing'
+import { ExportButton } from './components/ExportButton'
 import { Settings } from './components/Settings'
 import { AuthGate } from './components/AuthGate'
 import { storage } from './storage'
@@ -76,9 +77,12 @@ export default function App() {
                       </svg>
                     </button>
                     <ModeToggle mode={mode} onModeChange={setMode} />
-                    {isDev && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-wabi-timer/20 text-wabi-timer rounded ml-2 uppercase tracking-wider">dev</span>
-                    )}
+                    <div className="flex items-center gap-2 ml-auto">
+                      <ExportButton />
+                      {isDev && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold bg-wabi-timer/20 text-wabi-timer rounded uppercase tracking-wider">dev</span>
+                      )}
+                    </div>
                     {/* Mobile settings button */}
                     {!isElectron && (
                       <button
@@ -96,16 +100,22 @@ export default function App() {
                   <div className="flex-1 overflow-y-auto safe-bottom">
                     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
                       <ReminderBar />
+                      <NowFocus />
                       <KaresansuiStones />
+                      <DailyNote />
+                      <DayClosing />
 
                       {mode === 'execute' && (
-                        <>
-                          <EnergyGauge />
-                          <NowFocus />
-                          <ActionChecklist />
-                          <CheckInSubmit />
-                          <DailyNote />
-                        </>
+                        <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+                          {/* 左: 侘び (アクションリスト) */}
+                          <div className="flex-1 min-w-0">
+                            <ActionChecklist />
+                          </div>
+                          {/* 右: 寂び (チェックイン) */}
+                          <div className="w-full md:w-72 lg:w-80 shrink-0 space-y-4">
+                            <CheckInSubmit />
+                          </div>
+                        </div>
                       )}
                     </div>
                     {mode === 'edit' && (

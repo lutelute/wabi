@@ -16,7 +16,7 @@ export function EnergyGauge() {
   return (
     <div className="px-1">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-wabi-text-muted">体力</span>
+        <span className="text-xs text-wabi-text-muted">温度</span>
         <span className="text-xs text-wabi-text-muted font-mono">
           {progress.stamina} 残り
         </span>
@@ -40,7 +40,7 @@ export function EnergyGauge() {
         )}
       </div>
 
-      {/* エネルギー獲得バー — 下に小さく */}
+      {/* 獲得バー */}
       <div className="flex items-center gap-2 mt-2">
         <span className="text-[10px] text-wabi-text-muted">獲得</span>
         <div className="flex-1 h-1 bg-wabi-border/20 rounded-full overflow-hidden">
@@ -56,7 +56,7 @@ export function EnergyGauge() {
 
       {overflowing && (
         <p className="text-[10px] text-wabi-check mt-1 text-center">
-          よくやった
+          よく調った
         </p>
       )}
     </div>

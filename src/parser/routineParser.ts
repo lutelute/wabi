@@ -7,6 +7,7 @@ const TIME_REGEX = /^(\d{1,2}:\d{2})\s+/
 const DURATION_REGEX = /\s+(\d+)\s*(min|m|分|h|時間)\s*$/i
 const WEIGHT_REGEX = /\s+\*(\d+)\s*$/
 const MENTAL_REGEX = /\s+@mental\s*$/i
+const REST_REGEX = /\s+@rest\s*$/i
 const PHASE_REGEX = /^##\s+(.+)$/
 
 export function parseLine(line: string): RoutineItem | null {
@@ -18,12 +19,20 @@ export function parseLine(line: string): RoutineItem | null {
   let time: string | null = null
   let duration: number | null = null
   let isMental = false
+  let isRest = false
 
   // 時刻を抽出
   const timeMatch = content.match(TIME_REGEX)
   if (timeMatch) {
     time = timeMatch[1]
     content = content.slice(timeMatch[0].length)
+  }
+
+  // @rest を抽出（末尾）
+  const restMatch = content.match(REST_REGEX)
+  if (restMatch) {
+    isRest = true
+    content = content.slice(0, -restMatch[0].length).trim()
   }
 
   // @mental を抽出（末尾）
@@ -60,6 +69,7 @@ export function parseLine(line: string): RoutineItem | null {
     duration,
     weight,
     isMental,
+    isRest,
     rawLine: trimmed,
   }
 }

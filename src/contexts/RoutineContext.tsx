@@ -11,31 +11,28 @@ interface RoutineContextValue {
   createRoutine: (name: string) => void
   updateRoutineText: (id: string, text: string) => void
   renameRoutine: (id: string, name: string) => void
+  updateRoutineColor: (id: string, color: string) => void
+  updateRoutineMemo: (id: string, memo: string) => void
   deleteRoutine: (id: string) => void
   selectRoutine: (id: string) => void
 }
 
 const RoutineContext = createContext<RoutineContextValue | null>(null)
 
-const DEFAULT_TEXT = `## 仕事の調整
-- 今日取り組むことをひとつ選ぶ *2
-- 終わりの形を決める *1
+const DEFAULT_TEXT = `## ほどく
+- 今の自分の状態に気づく *1
+- こわばりをゆるめる *1
+- 急がなくていいことを確かめる *1
 
-## 時間の調整
-- 時間の使い方をざっくり決める *1
-- 余白を残す *1
+## 流す
+- 手を動かし始める *2
+- ひとつだけに集中する *3
+- 途中で手放してもいい *1
 
-## 精神の調整
-- 身体を動かす *2
-- 静かに座る 10min *2
-
-## 集中の時間
-- 深い仕事にひとつ取り組む *3
-- 手を動かして考える *2
-
-## 夕方の手放し
-- 今日できたことを思い出す *1
-- 明日のことは明日 *1`
+## なじむ
+- 今日やったことを振り返る *1
+- 明日の自分にゆだねる *1
+- 静かに終える *1`
 
 export function RoutineProvider({ children }: { children: ReactNode }) {
   const [routines, setRoutines] = useState<Routine[]>([])
@@ -62,7 +59,7 @@ export function RoutineProvider({ children }: { children: ReactNode }) {
         const now = new Date().toISOString()
         const initial: Routine = {
           id,
-          name: '朝のルーティン',
+          name: '寂び',
           text: DEFAULT_TEXT,
           phases: parseRoutineText(DEFAULT_TEXT),
           createdAt: now,
@@ -85,7 +82,7 @@ export function RoutineProvider({ children }: { children: ReactNode }) {
   const createRoutine = useCallback((name: string) => {
     const id = nanoid(8)
     const now = new Date().toISOString()
-    const defaultText = `## 準備\n- 今日やることを決める *1\n- 環境を整える *1\n\n## 実行\n- メインタスクに取り組む *3\n- 振り返る *1`
+    const defaultText = `## ほどく\n- 今の状態に気づく *1\n\n## 流す\n- 取り組むべきことに向かう *2\n\n## なじむ\n- 今日をふりかえる *1`
     const routine: Routine = {
       id,
       name,
@@ -112,6 +109,18 @@ export function RoutineProvider({ children }: { children: ReactNode }) {
     ))
   }, [])
 
+  const updateRoutineColor = useCallback((id: string, color: string) => {
+    setRoutines(prev => prev.map(r =>
+      r.id === id ? { ...r, color: color || undefined, updatedAt: new Date().toISOString() } : r
+    ))
+  }, [])
+
+  const updateRoutineMemo = useCallback((id: string, memo: string) => {
+    setRoutines(prev => prev.map(r =>
+      r.id === id ? { ...r, memo: memo || undefined, updatedAt: new Date().toISOString() } : r
+    ))
+  }, [])
+
   const deleteRoutine = useCallback((id: string) => {
     setRoutines(prev => {
       const next = prev.filter(r => r.id !== id)
@@ -132,6 +141,8 @@ export function RoutineProvider({ children }: { children: ReactNode }) {
       createRoutine,
       updateRoutineText,
       renameRoutine,
+      updateRoutineColor,
+      updateRoutineMemo,
       deleteRoutine,
       selectRoutine: setSelectedId,
     }}>

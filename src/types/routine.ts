@@ -173,9 +173,9 @@ export interface ElectronAPI {
   exportToObsidian: () => Promise<{ success: boolean; error?: string }>
   // Auto-updater
   checkForUpdates: () => void
-  installUpdate: () => void
+  openReleasePage: () => void
   onUpdateStatus: (callback: (status: string) => void) => () => void
-  onUpdateProgress?: (callback: (percent: number) => void) => () => void
+  onNewVersion?: (callback: (version: string) => void) => () => void
 }
 
 declare global {

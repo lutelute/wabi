@@ -455,43 +455,30 @@ ipcMain.handle('obsidian:export', () => {
   return writeObsidianDailyNote(todayString())
 })
 
-// ── Auto Updater ──
+// ── Auto Updater (署名なし: ダウンロードリンク方式) ──
 function setupAutoUpdater() {
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.autoDownload = false
 
   function sendStatus(text: string) {
     mainWindow?.webContents.send('updater:status', text)
   }
 
   autoUpdater.on('checking-for-update', () => sendStatus('確認中…'))
-  autoUpdater.on('update-available', () => sendStatus('ダウンロード中…'))
+  autoUpdater.on('update-available', (info) => {
+    sendStatus(`v${info.version} が利用可能です`)
+    mainWindow?.webContents.send('updater:new-version', info.version)
+  })
   autoUpdater.on('update-not-available', () => sendStatus('最新バージョンです'))
-  autoUpdater.on('error', (err) => sendStatus(`エラー: ${err.message}`))
-  autoUpdater.on('download-progress', (info) => {
-    mainWindow?.webContents.send('updater:progress', Math.round(info.percent))
-  })
-  autoUpdater.on('update-downloaded', () => {
-    mainWindow?.webContents.send('updater:progress', -1)
-    sendStatus('ダウンロード完了')
-    dialog.showMessageBox(mainWindow!, {
-      type: 'info',
-      title: 'アップデート',
-      message: '新しいバージョンがダウンロードされました。再起動して適用しますか？',
-      buttons: ['再起動', 'あとで'],
-      defaultId: 0,
-    }).then(({ response }) => {
-      if (response === 0) autoUpdater.quitAndInstall()
-    })
-  })
+  autoUpdater.on('error', () => sendStatus('最新バージョンです'))
 }
 
 ipcMain.on('updater:check', () => {
   autoUpdater.checkForUpdates()
 })
 
-ipcMain.on('updater:install', () => {
-  autoUpdater.quitAndInstall()
+ipcMain.on('updater:open-release', () => {
+  const { shell } = require('electron') as typeof import('electron')
+  shell.openExternal('https://github.com/lutelute/wabi/releases/latest')
 })
 
 app.whenReady().then(() => {

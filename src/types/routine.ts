@@ -175,6 +175,7 @@ export interface ElectronAPI {
   checkForUpdates: () => void
   installUpdate: () => void
   onUpdateStatus: (callback: (status: string) => void) => () => void
+  onUpdateProgress?: (callback: (percent: number) => void) => () => void
 }
 
 declare global {

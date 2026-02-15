@@ -39,4 +39,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('updater:status', handler)
     return () => ipcRenderer.removeListener('updater:status', handler)
   },
+  onUpdateProgress: (callback: (percent: number) => void) => {
+    const handler = (_event: unknown, percent: number) => callback(percent)
+    ipcRenderer.on('updater:progress', handler)
+    return () => ipcRenderer.removeListener('updater:progress', handler)
+  },
 })

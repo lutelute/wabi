@@ -12,6 +12,7 @@ export function Settings({ onClose }: Props) {
   const { settings, updateSetting } = useSettings()
   const [clearing, setClearing] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<string>('')
+  const [downloadPercent, setDownloadPercent] = useState<number>(-1)
   const [backupStatus, setBackupStatus] = useState<string>('')
   const [obsidianStatus, setObsidianStatus] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -27,9 +28,13 @@ export function Settings({ onClose }: Props) {
 
   useEffect(() => {
     if (!window.electronAPI?.onUpdateStatus) return
-    return window.electronAPI.onUpdateStatus((status: string) => {
+    const unsub1 = window.electronAPI.onUpdateStatus((status: string) => {
       setUpdateStatus(status)
     })
+    const unsub2 = window.electronAPI.onUpdateProgress?.((percent: number) => {
+      setDownloadPercent(percent)
+    })
+    return () => { unsub1(); unsub2?.() }
   }, [])
 
   const update = updateSetting
@@ -408,7 +413,18 @@ export function Settings({ onClose }: Props) {
                 >
                   アップデートを確認
                 </button>
-                {updateStatus && (
+                {downloadPercent >= 0 && (
+                  <div className="w-full max-w-[200px] mx-auto space-y-1">
+                    <div className="h-1.5 bg-wabi-border rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-wabi-text-muted rounded-full transition-all duration-300"
+                        style={{ width: `${downloadPercent}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-wabi-text-muted text-center">{downloadPercent}%</p>
+                  </div>
+                )}
+                {updateStatus && downloadPercent < 0 && (
                   <p className="text-[10px] text-wabi-text-muted">{updateStatus}</p>
                 )}
               </div>

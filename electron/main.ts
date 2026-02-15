@@ -465,13 +465,14 @@ function setupAutoUpdater() {
   }
 
   autoUpdater.on('checking-for-update', () => sendStatus('確認中…'))
-  autoUpdater.on('update-available', () => sendStatus('新しいバージョンをダウンロード中…'))
+  autoUpdater.on('update-available', () => sendStatus('ダウンロード中…'))
   autoUpdater.on('update-not-available', () => sendStatus('最新バージョンです'))
   autoUpdater.on('error', (err) => sendStatus(`エラー: ${err.message}`))
   autoUpdater.on('download-progress', (info) => {
-    sendStatus(`ダウンロード中… ${Math.round(info.percent)}%`)
+    mainWindow?.webContents.send('updater:progress', Math.round(info.percent))
   })
   autoUpdater.on('update-downloaded', () => {
+    mainWindow?.webContents.send('updater:progress', -1)
     sendStatus('ダウンロード完了')
     dialog.showMessageBox(mainWindow!, {
       type: 'info',

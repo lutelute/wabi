@@ -388,11 +388,9 @@ export function Settings({ onClose }: Props) {
           )}
 
           {/* アカウント */}
-          {isCloudEnabled() && (
-            <Section title="アカウント">
-              <AccountSection onLogout={handleLogout} />
-            </Section>
-          )}
+          <Section title="アカウント">
+            <AccountSection onLogout={handleLogout} />
+          </Section>
 
           {/* バージョン + アップデート */}
           <div className="pt-2 border-t border-wabi-border/50 space-y-2">
@@ -436,8 +434,8 @@ function AccountSection({ onLogout }: { onLogout: () => void }) {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [checkLoading, setCheckLoading] = useState(true)
   const [showLogin, setShowLogin] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
+  const [loginEmail, setLoginEmail] = useState('lutebass@gmail.com')
+  const [loginPassword, setLoginPassword] = useState('bib4pQpzAi7QGQiB')
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
 
@@ -456,6 +454,10 @@ function AccountSection({ onLogout }: { onLogout: () => void }) {
   }, [])
 
   if (checkLoading) return <p className="text-xs text-wabi-text-muted">確認中…</p>
+
+  if (!isCloudEnabled()) {
+    return <p className="text-xs text-wabi-text-muted">クラウド同期は未設定です（環境変数が必要）</p>
+  }
 
   if (userEmail) {
     return (

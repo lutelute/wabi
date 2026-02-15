@@ -1,19 +1,23 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { getSupabase, isCloudEnabled } from '../sync/supabaseClient'
 
-type AuthMethod = 'magic' | 'password'
+type AuthMethod = 'password' | 'otp'
 type AuthMode = 'login' | 'signup'
+
+const isStandalone = typeof window !== 'undefined' &&
+  (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true)
 
 interface Props {
   children: ReactNode
 }
 
 export function AuthGate({ children }: Props) {
-  const [state, setState] = useState<'loading' | 'form' | 'sent' | 'authenticated'>('loading')
+  const [state, setState] = useState<'loading' | 'form' | 'otp-verify' | 'authenticated'>('loading')
   const [method, setMethod] = useState<AuthMethod>('password')
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [otpCode, setOtpCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const isElectron = !!window.electronAPI
@@ -49,23 +53,47 @@ export function AuthGate({ children }: Props) {
     if (!supabase) return
 
     try {
-      if (method === 'magic') {
+      if (method === 'otp') {
+        // OTPコードをメールで送信（リダイレクトなし）
         const { error: err } = await supabase.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: window.location.origin + '/wabi/' },
+          options: {
+            shouldCreateUser: true,
+          },
         })
         if (err) { setError(err.message); return }
-        setState('sent')
+        setState('otp-verify')
       } else if (mode === 'signup') {
         const { error: err } = await supabase.auth.signUp({ email, password })
         if (err) { setError(err.message); return }
-        // autoconfirmが有効なので即ログイン状態になる
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password })
         if (err) {
           setError(err.message === 'Invalid login credentials' ? 'メールアドレスまたはパスワードが違います' : err.message)
           return
         }
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    const supabase = getSupabase()
+    if (!supabase) return
+
+    try {
+      const { error: err } = await supabase.auth.verifyOtp({
+        email,
+        token: otpCode.trim(),
+        type: 'email',
+      })
+      if (err) {
+        setError('コードが正しくありません')
+        return
       }
     } finally {
       setLoading(false)
@@ -84,18 +112,47 @@ export function AuthGate({ children }: Props) {
     return <>{children}</>
   }
 
-  if (state === 'sent') {
+  // OTPコード入力画面
+  if (state === 'otp-verify') {
     return (
       <div className="h-screen flex items-center justify-center bg-wabi-bg">
-        <div className="text-center space-y-4 max-w-sm mx-4">
-          <h1 className="text-lg font-medium text-wabi-text">メールを確認してください</h1>
-          <p className="text-sm text-wabi-text-muted">
-            <span className="font-medium text-wabi-text">{email}</span> にログインリンクを送信しました。
-            メール内のリンクをクリックしてログインしてください。
-          </p>
+        <div className="w-full max-w-sm mx-4 space-y-6">
+          <div className="text-center space-y-2">
+            <h1 className="text-lg font-medium text-wabi-text">認証コードを入力</h1>
+            <p className="text-sm text-wabi-text-muted">
+              <span className="font-medium text-wabi-text">{email}</span> に送信されたコードを入力してください
+            </p>
+          </div>
+
+          <form onSubmit={handleVerifyOtp} className="space-y-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+              autoFocus
+              value={otpCode}
+              onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="認証コード"
+              required
+              maxLength={8}
+              className="w-full px-4 py-3 text-sm text-center tracking-[0.5em] font-mono border border-wabi-border rounded-xl bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted placeholder:tracking-normal focus:outline-none focus:border-wabi-accent"
+            />
+
+            {error && <p className="text-xs text-wabi-timer">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={loading || otpCode.length < 6}
+              className="w-full py-3 text-sm font-medium bg-wabi-accent/20 text-wabi-text rounded-xl hover:bg-wabi-accent/30 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {loading ? '確認中…' : '確認'}
+            </button>
+          </form>
+
           <button
-            onClick={() => setState('form')}
-            className="text-sm text-wabi-accent hover:text-wabi-text cursor-pointer"
+            onClick={() => { setState('form'); setOtpCode(''); setError('') }}
+            className="block mx-auto text-xs text-wabi-accent hover:text-wabi-text cursor-pointer"
           >
             戻る
           </button>
@@ -104,6 +161,7 @@ export function AuthGate({ children }: Props) {
     )
   }
 
+  // ログインフォーム
   return (
     <div className="h-screen flex items-center justify-center bg-wabi-bg">
       <div className="w-full max-w-sm mx-4 space-y-6">
@@ -123,12 +181,12 @@ export function AuthGate({ children }: Props) {
             パスワード
           </button>
           <button
-            onClick={() => { setMethod('magic'); setError('') }}
+            onClick={() => { setMethod('otp'); setError('') }}
             className={`flex-1 py-2 text-xs cursor-pointer transition-colors ${
-              method === 'magic' ? 'bg-wabi-accent/20 text-wabi-text font-medium' : 'text-wabi-text-muted'
+              method === 'otp' ? 'bg-wabi-accent/20 text-wabi-text font-medium' : 'text-wabi-text-muted'
             }`}
           >
-            マジックリンク
+            メール認証コード
           </button>
         </div>
 
@@ -154,17 +212,15 @@ export function AuthGate({ children }: Props) {
             />
           )}
 
-          {error && (
-            <p className="text-xs text-wabi-timer">{error}</p>
-          )}
+          {error && <p className="text-xs text-wabi-timer">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full py-3 text-sm font-medium bg-wabi-accent/20 text-wabi-text rounded-xl hover:bg-wabi-accent/30 transition-colors cursor-pointer disabled:opacity-50"
           >
-            {loading ? '処理中…' : method === 'magic'
-              ? 'ログインリンクを送信'
+            {loading ? '処理中…' : method === 'otp'
+              ? '認証コードを送信'
               : mode === 'signup' ? 'アカウント作成' : 'ログイン'}
           </button>
         </form>
@@ -179,9 +235,9 @@ export function AuthGate({ children }: Props) {
           </p>
         )}
 
-        {method === 'magic' && (
+        {method === 'otp' && (
           <p className="text-xs text-wabi-text-muted text-center">
-            パスワード不要。メールにログインリンクが届きます。
+            メールに届く認証コードでログインします。{isStandalone ? '' : 'パスワード不要。'}
           </p>
         )}
       </div>

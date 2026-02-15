@@ -101,7 +101,10 @@ function createWindow() {
     },
   })
 
-  if (process.env.VITE_DEV_SERVER_URL) {
+  const isDev = !!process.env.VITE_DEV_SERVER_URL
+  mainWindow.setTitle(isDev ? '侘び [DEV]' : '侘び')
+
+  if (isDev) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools()
   } else {

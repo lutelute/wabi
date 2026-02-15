@@ -21,6 +21,7 @@ import { storage } from './storage'
 export type AppMode = 'edit' | 'execute'
 
 const isElectron = typeof window !== 'undefined' && !!window.electronAPI
+const isDev = import.meta.env.DEV
 
 export default function App() {
   const [mode, setMode] = useState<AppMode>('execute')
@@ -75,6 +76,9 @@ export default function App() {
                       </svg>
                     </button>
                     <ModeToggle mode={mode} onModeChange={setMode} />
+                    {isDev && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-wabi-timer/20 text-wabi-timer rounded ml-2 uppercase tracking-wider">dev</span>
+                    )}
                     {/* Mobile settings button */}
                     {!isElectron && (
                       <button

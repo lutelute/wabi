@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { useRoutines } from './RoutineContext'
 import { storage } from '../storage'
 import type { ExecutionState, TimerState, Mood, MentalCompletion } from '../types/routine'
@@ -100,18 +100,22 @@ export function ExecutionProvider({ children }: { children: ReactNode }) {
     })
   }, [selected?.id, date])
 
-  // 保存
+  // 保存（デバウンス: スライダー等の高頻度更新に対応）
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!selected || !loaded) return
-    const key = executionKey(selected.id, date)
-    const state: ExecutionState = {
-      routineId: selected.id, date, checkedItems, itemWeights,
-      timerState, declined, itemMoods,
-      mentalCompletions, dismissedConcepts,
-      // 後方互換: 空のフィールドも含める
-      moodLog: [], moodNote: '', staminaLog: [], mentalLog: [], checkIns: [],
-    }
-    storage.saveExecution(key, state)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const key = executionKey(selected.id, date)
+      const state: ExecutionState = {
+        routineId: selected.id, date, checkedItems, itemWeights,
+        timerState, declined, itemMoods,
+        mentalCompletions, dismissedConcepts,
+        moodLog: [], moodNote: '', staminaLog: [], mentalLog: [], checkIns: [],
+      }
+      storage.saveExecution(key, state)
+    }, 300)
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
   }, [checkedItems, itemWeights, timerState, declined, itemMoods, mentalCompletions, dismissedConcepts, selected?.id, date, loaded])
 
   // タイマー

@@ -111,27 +111,27 @@ export function CheckInSubmit() {
       <p className="text-xs text-wabi-text-muted mb-3">チェックイン</p>
 
       <div className="bg-wabi-surface rounded-lg border border-wabi-border/50 p-4 space-y-4 text-xs">
-        {/* 体力バー */}
-        <GaugeBar
-          label="体力"
-          value={stamina}
-          barRef={staminaBarRef}
-          gradientFrom="#059669"
-          gradientTo="#34d399"
-          trackColor="rgba(5,150,105,0.1)"
-          onClick={e => handleBarClick(e, staminaBarRef, setStamina)}
-        />
-
-        {/* 心バー */}
-        <GaugeBar
-          label="心"
-          value={mental}
-          barRef={mentalBarRef}
-          gradientFrom="#0284c7"
-          gradientTo="#38bdf8"
-          trackColor="rgba(2,132,199,0.1)"
-          onClick={e => handleBarClick(e, mentalBarRef, setMental)}
-        />
+        {/* 体力・心バー (1行) */}
+        <div className="flex gap-3">
+          <GaugeBar
+            label="体力"
+            value={stamina}
+            barRef={staminaBarRef}
+            gradientFrom="#059669"
+            gradientTo="#34d399"
+            trackColor="rgba(5,150,105,0.1)"
+            onClick={e => handleBarClick(e, staminaBarRef, setStamina)}
+          />
+          <GaugeBar
+            label="心"
+            value={mental}
+            barRef={mentalBarRef}
+            gradientFrom="#0284c7"
+            gradientTo="#38bdf8"
+            trackColor="rgba(2,132,199,0.1)"
+            onClick={e => handleBarClick(e, mentalBarRef, setMental)}
+          />
+        </div>
 
         {/* 気分 */}
         <div>
@@ -208,19 +208,21 @@ export function CheckInSubmit() {
 
         {/* 時系列グラフ */}
         {(staminaLog.length >= 2 || mentalLog.length >= 2) && (
-          <div className="pt-2 border-t border-wabi-border/30 space-y-2">
-            {staminaLog.length >= 2 && (
-              <div>
-                <span className="text-[10px] text-wabi-text-muted/50">体力の推移</span>
-                <TimeGraph log={staminaLog} gradientFrom="#059669" gradientTo="#34d399" />
-              </div>
-            )}
-            {mentalLog.length >= 2 && (
-              <div>
-                <span className="text-[10px] text-wabi-text-muted/50">心の推移</span>
-                <TimeGraph log={mentalLog} gradientFrom="#0284c7" gradientTo="#38bdf8" />
-              </div>
-            )}
+          <div className="pt-2 border-t border-wabi-border/30">
+            <div className="flex gap-3">
+              {staminaLog.length >= 2 && (
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-wabi-text-muted/50">体力の推移</span>
+                  <TimeGraph log={staminaLog} gradientFrom="#059669" gradientTo="#34d399" />
+                </div>
+              )}
+              {mentalLog.length >= 2 && (
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-wabi-text-muted/50">心の推移</span>
+                  <TimeGraph log={mentalLog} gradientFrom="#0284c7" gradientTo="#38bdf8" />
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -279,7 +281,7 @@ function GaugeBar({ label, value, barRef, gradientFrom, gradientTo, trackColor, 
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void
 }) {
   return (
-    <div>
+    <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-1">
         <span className="text-wabi-text-muted">{label}</span>
         <span className="text-[10px] text-wabi-text-muted font-mono">{value}</span>

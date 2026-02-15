@@ -1,8 +1,8 @@
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { useSettings } from '../contexts/SettingsContext'
 
 export function EnergyGauge() {
-  const { progress } = useExecution()
+  const { progress } = useActionList()
   const { settings } = useSettings()
 
   if (!Number.isFinite(progress.capacity) || progress.capacity === 0) return null

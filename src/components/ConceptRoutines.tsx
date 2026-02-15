@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { useDay } from '../contexts/DayContext'
 import { useSettings } from '../contexts/SettingsContext'
 import type { TimeSlot } from '../types/routine'
@@ -46,7 +46,7 @@ const TEMPLATES: Template[] = [
 
 export function ConceptRoutines() {
   const { settings } = useSettings()
-  const { dismissedConcepts, dismissConcept } = useExecution()
+  const { dismissedConcepts, dismissConcept } = useActionList()
   const { customConcepts, addCustomConcept } = useDay()
   const [slot, setSlot] = useState(getCurrentSlot)
   const [adding, setAdding] = useState(false)

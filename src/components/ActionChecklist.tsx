@@ -1,63 +1,63 @@
 import { useState, useRef, useCallback } from 'react'
-import { useRoutines } from '../contexts/RoutineContext'
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { MentalCheckDialog } from './MentalCheckDialog'
 import { MOOD_OPTIONS } from '../types/routine'
-import type { Mood, RoutineItem } from '../types/routine'
+import type { Mood, DailyAction } from '../types/routine'
 
 const LONG_PRESS_MS = 1500
 
-export function RoutineChecklist() {
-  const { selected } = useRoutines()
+export function ActionChecklist() {
   const {
-    checkedItems, toggleCheck, getWeight, updateWeight,
+    actions, checkedItems, toggleCheck, getWeight, updateWeight,
     itemMoods, setItemMood, addMentalCompletion,
     timerState, startTimer, stopTimer,
-  } = useExecution()
+  } = useActionList()
   const { settings } = useSettings()
-  const [mentalDialog, setMentalDialog] = useState<RoutineItem | null>(null)
+  const [mentalDialog, setMentalDialog] = useState<DailyAction | null>(null)
   const [showWeights, setShowWeights] = useState(false)
   const weightMax = settings.weightMax || 5
 
-  if (!selected || selected.phases.length === 0) return null
-
-  const allItems = selected.phases.flatMap(p => p.items)
-  const doneCount = allItems.filter(i => checkedItems[i.id]).length
-
-  const handleCheck = (item: RoutineItem) => {
-    if (checkedItems[item.id]) {
-      // unchecking
-      toggleCheck(item.id)
-      return
-    }
-    if (item.isMental) {
-      setMentalDialog(item)
-      return
-    }
-    if (item.duration) {
-      // duration あり → タイマー起動
-      startTimer(item.id, item.duration)
-      return
-    }
-    // duration なし → 直接完了
-    toggleCheck(item.id)
+  if (actions.length === 0) {
+    return (
+      <div className="px-1 py-6 text-center">
+        <p className="text-xs text-wabi-text-muted/50">サイドバーからアイテムを追加してください</p>
+      </div>
+    )
   }
 
-  const handleDirectComplete = (item: RoutineItem) => {
-    if (item.isMental) {
-      setMentalDialog(item)
+  const doneCount = actions.filter(a => checkedItems[a.id]).length
+
+  const handleCheck = (action: DailyAction) => {
+    if (checkedItems[action.id]) {
+      toggleCheck(action.id)
       return
     }
-    toggleCheck(item.id)
+    if (action.isMental) {
+      setMentalDialog(action)
+      return
+    }
+    if (action.duration) {
+      startTimer(action.id, action.duration)
+      return
+    }
+    toggleCheck(action.id)
   }
 
-  const handleTimerComplete = (item: RoutineItem) => {
+  const handleDirectComplete = (action: DailyAction) => {
+    if (action.isMental) {
+      setMentalDialog(action)
+      return
+    }
+    toggleCheck(action.id)
+  }
+
+  const handleTimerComplete = (action: DailyAction) => {
     stopTimer()
-    if (item.isMental) {
-      setMentalDialog(item)
+    if (action.isMental) {
+      setMentalDialog(action)
     } else {
-      toggleCheck(item.id)
+      toggleCheck(action.id)
     }
   }
 
@@ -71,12 +71,24 @@ export function RoutineChecklist() {
     setMentalDialog(null)
   }
 
+  // フェーズ別にグループ化（表示用）
+  const groups: { routineName: string; phaseTitle: string; actions: DailyAction[] }[] = []
+  for (const action of actions) {
+    const key = `${action.sourceRoutineId}:${action.sourcePhaseTitle}`
+    const existing = groups.find(g => `${g.actions[0].sourceRoutineId}:${g.actions[0].sourcePhaseTitle}` === key)
+    if (existing) {
+      existing.actions.push(action)
+    } else {
+      groups.push({ routineName: action.sourceRoutineName, phaseTitle: action.sourcePhaseTitle, actions: [action] })
+    }
+  }
+
   return (
     <div className="px-1">
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-wabi-text-muted">
-          ルーティン <span className="font-mono">{doneCount}/{allItems.length}</span>
+          アクション <span className="font-mono">{doneCount}/{actions.length}</span>
         </span>
         <button
           onClick={() => setShowWeights(v => !v)}
@@ -88,26 +100,29 @@ export function RoutineChecklist() {
 
       {/* リスト */}
       <div className="space-y-1">
-        {selected.phases.map(phase => {
-          const phaseDone = phase.items.filter(i => checkedItems[i.id]).length
-          const phaseComplete = phaseDone === phase.items.length
+        {groups.map((group, gi) => {
+          const phaseDone = group.actions.filter(a => checkedItems[a.id]).length
+          const phaseComplete = phaseDone === group.actions.length
           return (
-            <div key={phase.id}>
-              {phase.title && (
+            <div key={gi}>
+              {group.phaseTitle && (
                 <div className={`flex items-center justify-between px-1 py-1 ${phaseComplete ? 'opacity-40' : ''}`}>
-                  <span className="text-[10px] font-medium text-wabi-text-muted">{phase.title}</span>
-                  <span className="text-[10px] text-wabi-text-muted/50">{phaseDone}/{phase.items.length}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-wabi-text-muted">{group.phaseTitle}</span>
+                    <span className="text-[9px] text-wabi-text-muted/40">{group.routineName}</span>
+                  </div>
+                  <span className="text-[10px] text-wabi-text-muted/50">{phaseDone}/{group.actions.length}</span>
                 </div>
               )}
-              {phase.items.map(item => {
-                const checked = !!checkedItems[item.id]
-                const w = getWeight(item.title, item.weight)
-                const mood = itemMoods[item.id] as Mood | undefined
-                const isTimerActive = timerState?.running && timerState.itemId === item.id
+              {group.actions.map(action => {
+                const checked = !!checkedItems[action.id]
+                const w = getWeight(action.title, action.weight)
+                const mood = itemMoods[action.id] as Mood | undefined
+                const isTimerActive = timerState?.running && timerState.itemId === action.id
 
                 return (
                   <div
-                    key={item.id}
+                    key={action.id}
                     className={`rounded-lg transition-colors ${
                       isTimerActive
                         ? 'bg-wabi-surface border border-wabi-border'
@@ -118,19 +133,19 @@ export function RoutineChecklist() {
                   >
                     <div className="flex items-center gap-2 px-2 py-2">
                       {/* チェックボックス */}
-                      {item.isMental && !checked ? (
+                      {action.isMental && !checked ? (
                         <LongPressCheck
                           onComplete={() => {
-                            if (item.duration && !isTimerActive) {
-                              startTimer(item.id, item.duration)
+                            if (action.duration && !isTimerActive) {
+                              startTimer(action.id, action.duration)
                               return
                             }
-                            setMentalDialog(item)
+                            setMentalDialog(action)
                           }}
                         />
                       ) : (
                         <button
-                          onClick={() => handleCheck(item)}
+                          onClick={() => handleCheck(action)}
                           className="shrink-0 cursor-pointer"
                         >
                           <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
@@ -145,22 +160,29 @@ export function RoutineChecklist() {
                         </button>
                       )}
 
-                      {/* タイトル */}
-                      <span className={`text-xs flex-1 ${checked ? 'line-through text-wabi-text-muted' : 'text-wabi-text'}`}>
-                        {item.title}
-                        {item.isMental && (
-                          <span className="ml-1.5 text-[9px] text-amber-600/70 bg-amber-500/10 px-1 py-px rounded">mental</span>
+                      {/* タイトル + ソースタグ */}
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-xs ${checked ? 'line-through text-wabi-text-muted' : 'text-wabi-text'}`}>
+                          {action.title}
+                          {action.isMental && (
+                            <span className="ml-1.5 text-[9px] text-amber-600/70 bg-amber-500/10 px-1 py-px rounded">mental</span>
+                          )}
+                        </span>
+                        {!group.phaseTitle && (
+                          <span className="block text-[9px] text-wabi-text-muted/40 truncate">
+                            {action.sourceRoutineName} {'>'} {action.sourcePhaseTitle}
+                          </span>
                         )}
-                      </span>
+                      </div>
 
-                      {/* duration あり & 未完了: タイマー/直接完了 */}
-                      {item.duration && !checked && !isTimerActive && (
+                      {/* duration あり & 未完了 */}
+                      {action.duration && !checked && !isTimerActive && (
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[10px] text-wabi-text-muted/40 font-mono">{item.duration}分</span>
+                          <span className="text-[10px] text-wabi-text-muted/40 font-mono">{action.duration}分</span>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleDirectComplete(item)
+                              handleDirectComplete(action)
                             }}
                             className="text-[10px] text-wabi-text-muted/40 hover:text-wabi-check cursor-pointer px-1 py-0.5 rounded hover:bg-wabi-surface transition-colors"
                             title="タイマーなしで完了"
@@ -178,7 +200,7 @@ export function RoutineChecklist() {
                             min={1}
                             max={weightMax}
                             value={w}
-                            onChange={e => updateWeight(item.title, Number(e.target.value))}
+                            onChange={e => updateWeight(action.title, Number(e.target.value))}
                             className="w-12 h-1 accent-wabi-accent cursor-pointer"
                             style={{ accentColor: '#c4a882' }}
                           />
@@ -187,13 +209,13 @@ export function RoutineChecklist() {
                       )}
                     </div>
 
-                    {/* タイマー表示 (インライン) */}
+                    {/* タイマー表示 */}
                     {isTimerActive && timerState && (
                       <TimerInline
                         remaining={timerState.remaining}
                         total={timerState.total}
-                        item={item}
-                        onComplete={() => handleTimerComplete(item)}
+                        action={action}
+                        onComplete={() => handleTimerComplete(action)}
                         onStop={stopTimer}
                       />
                     )}
@@ -204,7 +226,7 @@ export function RoutineChecklist() {
                         {MOOD_OPTIONS.map(({ value, label }) => (
                           <button
                             key={value}
-                            onClick={() => setItemMood(item.id, value)}
+                            onClick={() => setItemMood(action.id, value)}
                             className={`px-1.5 py-0.5 text-[10px] rounded cursor-pointer transition-colors ${
                               mood === value
                                 ? 'bg-wabi-accent/20 text-wabi-text'
@@ -237,10 +259,10 @@ export function RoutineChecklist() {
 }
 
 /** インラインタイマー表示 */
-function TimerInline({ remaining, total, item, onComplete, onStop }: {
+function TimerInline({ remaining, total, action, onComplete, onStop }: {
   remaining: number
   total: number
-  item: RoutineItem
+  action: DailyAction
   onComplete: () => void
   onStop: () => void
 }) {
@@ -250,7 +272,6 @@ function TimerInline({ remaining, total, item, onComplete, onStop }: {
 
   return (
     <div className="px-8 pb-3 space-y-2">
-      {/* プログレスバー */}
       <div className="h-1 bg-wabi-border/30 rounded-full overflow-hidden">
         <div
           className="h-full bg-wabi-timer rounded-full transition-all duration-1000"
@@ -268,7 +289,7 @@ function TimerInline({ remaining, total, item, onComplete, onStop }: {
           >
             中止
           </button>
-          {item.isMental ? (
+          {action.isMental ? (
             <LongPressButton label="完了" onComplete={onComplete} />
           ) : (
             <button

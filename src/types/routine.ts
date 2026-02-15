@@ -106,6 +106,33 @@ export interface DailyNoteMeta {
   tags: string[]
 }
 
+// ── アクションリスト方式 ──
+export interface DailyAction {
+  id: string                    // nanoid
+  sourceRoutineId: string       // 元のルーティンID
+  sourceRoutineName: string     // "朝のルーティン"
+  sourcePhaseTitle: string      // "仕事の調整"
+  sourceItemId: string          // 元のRoutineItem.id
+  title: string                 // "ストレッチ"
+  duration: number | null
+  weight: number
+  isMental: boolean
+  customTags: string[]          // ユーザー追加タグ
+  addedAt: string               // ISO string
+}
+
+export interface DailyActionState {
+  date: string                  // "2026-02-15"
+  actions: DailyAction[]        // 今日のアクションリスト
+  checkedItems: Record<string, boolean>  // actionId → checked
+  itemWeights: Record<string, number>    // title → weight
+  timerState: TimerState | null
+  itemMoods: Record<string, Mood>
+  mentalCompletions: MentalCompletion[]
+  declined: string              // 今日やらないと決めたこと
+  dismissedConcepts: string[]   // dismiss済み概念ルーティンID
+}
+
 export interface ExecutionState {
   routineId: string
   date: string              // "2026-02-10"

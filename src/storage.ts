@@ -1,4 +1,4 @@
-import type { Routine, ExecutionState, AppSettings, BackupData, Reminder, ReminderInstance } from './types/routine'
+import type { Routine, ExecutionState, DailyActionState, AppSettings, BackupData, Reminder, ReminderInstance } from './types/routine'
 import type { DayState } from './contexts/DayContext'
 import { DEFAULT_SETTINGS } from './types/routine'
 import { debouncedPush, pullAll, setupOnlineListener, isAuthenticated } from './sync/syncEngine'
@@ -144,6 +144,25 @@ export const storage = {
   async saveExecution(key: string, state: ExecutionState): Promise<boolean> {
     if (isElectron) {
       const ok = await window.electronAPI.saveExecution(key, state)
+      syncPush(`exec:${key}`, state)
+      return ok
+    }
+    lsRotate(`wabi:exec:${key}`)
+    lsSet(`wabi:exec:${key}`, state)
+    syncPush(`exec:${key}`, state)
+    return true
+  },
+
+  async getActionState(date: string): Promise<DailyActionState | null> {
+    const key = `actions:${date}`
+    if (isElectron) return window.electronAPI.getExecution(key) as Promise<any>
+    return lsGet<DailyActionState | null>(`wabi:exec:${key}`, null)
+  },
+
+  async saveActionState(date: string, state: DailyActionState): Promise<boolean> {
+    const key = `actions:${date}`
+    if (isElectron) {
+      const ok = await window.electronAPI.saveExecution(key, state as any)
       syncPush(`exec:${key}`, state)
       return ok
     }

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { RoutineProvider } from './contexts/RoutineContext'
-import { ExecutionProvider } from './contexts/ExecutionContext'
+import { ActionListProvider } from './contexts/ActionListContext'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { DayProvider } from './contexts/DayContext'
 import { ReminderProvider } from './contexts/ReminderContext'
 import { Sidebar } from './components/Sidebar'
 import { ModeToggle } from './components/ModeToggle'
 import { RoutineEditor } from './components/RoutineEditor'
-import { RoutineChecklist } from './components/RoutineChecklist'
+import { ActionChecklist } from './components/ActionChecklist'
 import { NowFocus } from './components/NowFocus'
 import { EnergyGauge } from './components/EnergyGauge'
 import { KaresansuiStones } from './components/KaresansuiStones'
@@ -36,7 +36,7 @@ export default function App() {
     <AuthGate>
     <DayProvider>
       <RoutineProvider>
-        <ExecutionProvider>
+        <ActionListProvider>
           <SettingsProvider>
             <ReminderProvider>
               <div className="flex h-full">
@@ -103,7 +103,7 @@ export default function App() {
                         <>
                           <EnergyGauge />
                           <NowFocus />
-                          <RoutineChecklist />
+                          <ActionChecklist />
                           <DailyNote />
                         </>
                       )}
@@ -120,7 +120,7 @@ export default function App() {
               {showSettings && <Settings onClose={() => setShowSettings(false)} />}
             </ReminderProvider>
           </SettingsProvider>
-        </ExecutionProvider>
+        </ActionListProvider>
       </RoutineProvider>
     </DayProvider>
     </AuthGate>

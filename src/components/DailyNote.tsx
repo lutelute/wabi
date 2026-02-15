@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useDay } from '../contexts/DayContext'
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { useRoutines } from '../contexts/RoutineContext'
 import { buildDailyNoteMarkdown } from '../utils/dailyNoteExport'
 import { DailyNotePreview } from './DailyNotePreview'
@@ -12,15 +12,14 @@ const MOOD_LABEL: Record<Mood, string> = {
 
 export function DailyNote() {
   const dayState = useDay()
-  const { declined, progress, checkedItems, itemMoods, mentalCompletions } = useExecution()
+  const { declined, progress, checkedItems, itemMoods, mentalCompletions } = useActionList()
   const { selected } = useRoutines()
   const [showPreview, setShowPreview] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const execState = useMemo(() => {
-    if (!selected) return null
     return {
-      routineId: selected.id,
+      routineId: selected?.id ?? '',
       date: dayState.date,
       checkedItems,
       itemWeights: {},

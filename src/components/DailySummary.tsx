@@ -1,6 +1,5 @@
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { useDay } from '../contexts/DayContext'
-import { useRoutines } from '../contexts/RoutineContext'
 import type { Mood } from '../types/routine'
 
 const MOOD_LABEL: Record<Mood, string> = {
@@ -8,15 +7,12 @@ const MOOD_LABEL: Record<Mood, string> = {
 }
 
 export function DailySummary() {
-  const { selected } = useRoutines()
-  const { checkedItems, itemMoods, declined, progress, mentalCompletions } = useExecution()
+  const { actions, checkedItems, itemMoods, declined, progress, mentalCompletions } = useActionList()
   const { moodLog, dailyNotes, staminaLog, mentalLog, checkIns } = useDay()
 
-  const completedItems = selected?.phases
-    .flatMap(p => p.items)
-    .filter(i => checkedItems[i.id]) ?? []
+  const completedActions = actions.filter(a => checkedItems[a.id])
 
-  const hasAny = completedItems.length > 0 || moodLog.length > 0 || staminaLog.length > 0 || mentalLog.length > 0 || checkIns.length > 0
+  const hasAny = completedActions.length > 0 || moodLog.length > 0 || staminaLog.length > 0 || mentalLog.length > 0 || checkIns.length > 0
 
   if (!hasAny) return null
 
@@ -66,21 +62,21 @@ export function DailySummary() {
         )}
 
         {/* 完了タスク + 気持ち */}
-        {completedItems.length > 0 && (
+        {completedActions.length > 0 && (
           <div>
             <p className="text-wabi-text-muted mb-1">
               {progress.done}/{progress.total} 完了
             </p>
             <ul className="space-y-0.5">
-              {completedItems.map(item => {
-                const mood = itemMoods[item.id] as Mood | undefined
-                const mc = mentalCompletions.find(m => m.itemId === item.id)
+              {completedActions.map(action => {
+                const mood = itemMoods[action.id] as Mood | undefined
+                const mc = mentalCompletions.find(m => m.itemId === action.id)
                 return (
-                  <li key={item.id} className="text-wabi-text-muted">
+                  <li key={action.id} className="text-wabi-text-muted">
                     <div className="flex items-center gap-1.5">
                       <span className="text-wabi-check">-</span>
-                      <span>{item.title}</span>
-                      {item.isMental && (
+                      <span>{action.title}</span>
+                      {action.isMental && (
                         <span className="text-[9px] text-amber-600/50 bg-amber-500/10 px-1 py-px rounded">mental</span>
                       )}
                       {mood && (

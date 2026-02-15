@@ -1,7 +1,7 @@
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 
 export function TimerDisplay() {
-  const { timerState, stopTimer } = useExecution()
+  const { timerState, stopTimer } = useActionList()
 
   if (!timerState) return null
 

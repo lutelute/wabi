@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { useExecution } from '../contexts/ExecutionContext'
-import { useRoutines } from '../contexts/RoutineContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { storage } from '../storage'
 
@@ -43,15 +42,12 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 interface Particle {
-  // ノイズ時のランダム位置パラメータ
   randomR: number
   randomAngle: number
   randomSpeed: number
   randomDrift: number
-  // 整列時の目標位置
   targetRing: number
   targetAngle: number
-  // 見た目
   size: number
   brightness: number
 }
@@ -89,7 +85,6 @@ function drawGarden(
 ) {
   const easedRatio = easeInOutCubic(Math.min(ratio, 1))
 
-  // 全完了時のゆっくり回転
   const globalRotation = easedRatio > 0.95
     ? time * 0.00003
     : time * 0.00001 * easedRatio
@@ -100,7 +95,6 @@ function drawGarden(
     const points = 80 + ring * 12
     const distortion = (1 - easedRatio) * baseR * 0.4
 
-    // 呼吸するような脈動 (整列時のみ)
     const breathe = easedRatio > 0.5
       ? Math.sin(time * 0.001 + ring * 0.5) * 2 * easedRatio
       : 0
@@ -109,7 +103,6 @@ function drawGarden(
     for (let j = 0; j <= points; j++) {
       const angle = (j / points) * Math.PI * 2 + globalRotation
 
-      // ノイズ: 複数の周波数を合成
       const noise = distortion * (
         Math.sin(angle * 3 + ring * 1.7 + time * 0.0004) * 0.45 +
         Math.cos(angle * 5 + ring * 2.3 + time * 0.0003) * 0.3 +
@@ -129,7 +122,6 @@ function drawGarden(
     const ringAlpha = (ring / rings)
     const alpha = lerp(0.08, 0.55, easedRatio) * ringAlpha
 
-    // 色の遷移: 砂色 → 整列で緑味がかる
     const r = Math.round(lerp(196, 122, easedRatio * ringAlpha))
     const g = Math.round(lerp(168, 158, easedRatio * ringAlpha))
     const b = Math.round(lerp(130, 126, easedRatio * ringAlpha))
@@ -141,20 +133,17 @@ function drawGarden(
 
   // ---- パーティクル ----
   for (const p of particles) {
-    // ノイズ位置: ゆっくり漂う
     const noiseAngle = p.randomAngle + time * p.randomSpeed
     const noiseDrift = Math.sin(time * p.randomSpeed * 1.3 + p.randomDrift * 10) * radius * 0.15
     const noiseR = p.randomR + noiseDrift
     const noiseX = cx + Math.cos(noiseAngle) * noiseR
     const noiseY = cy + Math.sin(noiseAngle) * noiseR
 
-    // 整列位置: 同心円上
     const targetR = (radius * (p.targetRing + 1)) / (rings + 1)
     const targetAngle = p.targetAngle + globalRotation
     const targetX = cx + Math.cos(targetAngle) * targetR
     const targetY = cy + Math.sin(targetAngle) * targetR
 
-    // 補間
     const x = lerp(noiseX, targetX, easedRatio)
     const y = lerp(noiseY, targetY, easedRatio)
 
@@ -169,7 +158,6 @@ function drawGarden(
 
   // ---- 中心の石 ----
   const stoneR = lerp(2, 7, easedRatio) * dpr
-  // 石の呼吸
   const stoneBreathe = easedRatio > 0.8
     ? Math.sin(time * 0.0015) * 0.5 * dpr
     : 0
@@ -200,7 +188,6 @@ function drawGarden(
   ctx.fillText(pctText, cx, cy + radius + 30 * dpr)
 }
 
-// 庭をつなぐ砂の筋
 function drawConnections(
   ctx: CanvasRenderingContext2D,
   gardens: { x: number; y: number; r: number }[],
@@ -239,8 +226,7 @@ function getParticleCount(density: 'low' | 'normal' | 'high'): number {
 export function KaresansuiStones() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef = useRef<number>(0)
-  const { progress } = useExecution()
-  const { selected } = useRoutines()
+  const { progress } = useActionList()
   const { settings } = useSettings()
   const [weekRatio, setWeekRatio] = useState(0)
   const [monthRatio, setMonthRatio] = useState(0)
@@ -248,7 +234,6 @@ export function KaresansuiStones() {
   const dayRings = Number.isFinite(settings.karesansuiRings) ? settings.karesansuiRings : 10
   const dayParticleCount = getParticleCount(settings.particleCount)
 
-  // パーティクル群（初回生成のみ）
   const dayParticlesRef = useRef<Particle[]>([])
   const weekParticlesRef = useRef<Particle[]>([])
   const monthParticlesRef = useRef<Particle[]>([])
@@ -257,10 +242,8 @@ export function KaresansuiStones() {
     ? Math.min(progress.energy / progress.capacity, 1)
     : 0
 
-  // 週・月の履歴
+  // 週・月の履歴ロード
   useEffect(() => {
-    if (!selected) return
-
     async function loadHistory() {
       const today = todayString()
       const weekDates = getWeekDates()
@@ -280,14 +263,32 @@ export function KaresansuiStones() {
           continue
         }
 
-        const key = `${selected!.id}:${date}`
-        const exec = await storage.getExecution(key)
-        if (exec) {
-          const checked = Object.values(exec.checkedItems).filter(Boolean).length
-          const total = Object.keys(exec.checkedItems).length
+        // 新キーから読む
+        const actionState = await storage.getActionState(date)
+        if (actionState && actionState.actions.length > 0) {
+          const checked = Object.values(actionState.checkedItems).filter(Boolean).length
+          const total = actionState.actions.length
           const r = total > 0 ? checked / total : 0
           if (weekDates.includes(date)) { weekTotal += r; weekDays++ }
           if (monthDates.includes(date)) { monthTotal += r; monthDays++ }
+          continue
+        }
+
+        // 旧キーからフォールバック: 全ルーティンの中から探す
+        // 簡易的に localStorage のキーをスキャンする
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('wabi:exec:') && k.endsWith(`:${date}`))
+        for (const lsKey of keys) {
+          try {
+            const exec = JSON.parse(localStorage.getItem(lsKey) || 'null')
+            if (exec?.checkedItems) {
+              const checked = Object.values(exec.checkedItems).filter(Boolean).length
+              const total = Object.keys(exec.checkedItems).length
+              const r = total > 0 ? checked / total : 0
+              if (weekDates.includes(date)) { weekTotal += r; weekDays++ }
+              if (monthDates.includes(date)) { monthTotal += r; monthDays++ }
+              break // 最初に見つかったものを使う
+            }
+          } catch { /* ignore */ }
         }
       }
 
@@ -296,7 +297,7 @@ export function KaresansuiStones() {
     }
 
     loadHistory()
-  }, [selected?.id, progress.energy, progress.capacity])
+  }, [progress.energy, progress.capacity])
 
   // 設定変更時にパーティクル再生成
   useEffect(() => {
@@ -323,7 +324,6 @@ export function KaresansuiStones() {
     const w = () => rect.width * dpr
     const h = () => rect.height * dpr
 
-    // パーティクル初回生成
     const dayR = () => Math.min(w() * 0.2, h() * 0.36)
     const subR = () => Math.min(w() * 0.14, h() * 0.28)
 
@@ -345,7 +345,6 @@ export function KaresansuiStones() {
       const dr = dayR()
       const sr = subR()
 
-      // レイアウト: 今日（左大）、今週（右上中）、今月（右下中）
       const dayX = cw * 0.32
       const dayY = ch * 0.46
       const weekX = cw * 0.68

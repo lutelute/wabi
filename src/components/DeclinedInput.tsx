@@ -1,7 +1,7 @@
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 
 export function DeclinedInput() {
-  const { declined, updateDeclined } = useExecution()
+  const { declined, updateDeclined } = useActionList()
 
   return (
     <div className="border-t border-wabi-border pt-4">

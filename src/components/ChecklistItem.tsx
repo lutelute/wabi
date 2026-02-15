@@ -1,4 +1,4 @@
-import { useExecution } from '../contexts/ExecutionContext'
+import { useActionList } from '../contexts/ActionListContext'
 import { TimerDisplay } from './TimerDisplay'
 import type { RoutineItem } from '../types/routine'
 
@@ -7,7 +7,7 @@ interface ChecklistItemProps {
 }
 
 export function ChecklistItem({ item }: ChecklistItemProps) {
-  const { checkedItems, toggleCheck, timerState, startTimer } = useExecution()
+  const { checkedItems, toggleCheck, timerState, startTimer } = useActionList()
   const checked = !!checkedItems[item.id]
   const isTimerActive = timerState?.itemId === item.id && timerState.running
 

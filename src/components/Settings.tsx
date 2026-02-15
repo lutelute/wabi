@@ -400,7 +400,7 @@ export function Settings({ onClose }: Props) {
           {/* バージョン + アップデート */}
           <div className="pt-2 border-t border-wabi-border/50 space-y-2">
             <p className="text-xs text-wabi-text-muted text-center">
-              侘び v1.0.0
+              侘び v1.1.0
             </p>
             {window.electronAPI?.checkForUpdates && (
               <div className="flex flex-col items-center gap-1">
@@ -446,11 +446,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function AccountSection({ onLogout }: { onLogout: () => void }) {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [checkLoading, setCheckLoading] = useState(true)
-  const [showLogin, setShowLogin] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('lutebass@gmail.com')
-  const [loginPassword, setLoginPassword] = useState('bib4pQpzAi7QGQiB')
+  const [view, setView] = useState<'idle' | 'form' | 'otp-verify' | 'set-password'>('idle')
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [otpCode, setOtpCode] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
+  const [loginSuccess, setLoginSuccess] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  // OTP認証後にパスワード設定に進むかどうか（useRefでクロージャ問題回避）
+  const pendingPasswordSetRef = useRef(false)
+  const setPendingPasswordSet = (v: boolean) => { pendingPasswordSetRef.current = v }
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -461,38 +467,175 @@ function AccountSection({ onLogout }: { onLogout: () => void }) {
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email ?? null)
-      if (session) setShowLogin(false)
+      if (session) {
+        // パスワード設定フローの場合は set-password へ遷移
+        // それ以外は idle に戻す
+        setView(prev => prev === 'otp-verify' && pendingPasswordSetRef.current ? 'set-password' : 'idle')
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  if (checkLoading) return <p className="text-xs text-wabi-text-muted">確認中…</p>
+  if (checkLoading) return <p className="text-xs text-wabi-text-muted">確認中...</p>
 
   if (!isCloudEnabled()) {
     return <p className="text-xs text-wabi-text-muted">クラウド同期は未設定です（環境変数が必要）</p>
   }
 
+  // ログイン済み
   if (userEmail) {
+    // パスワード設定フォーム
+    if (view === 'set-password') {
+      const handleSetPassword = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setLoginError('')
+        setLoginLoading(true)
+        const supabase = getSupabase()
+        if (!supabase) return
+        try {
+          const { error } = await supabase.auth.updateUser({ password: newPassword })
+          if (error) {
+            setLoginError(error.message)
+          } else {
+            setLoginSuccess('パスワードを設定しました')
+            setView('idle')
+            setNewPassword('')
+          }
+        } finally {
+          setLoginLoading(false)
+        }
+      }
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-wabi-text">{userEmail}</p>
+          <form onSubmit={handleSetPassword} className="space-y-2">
+            <input
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="新しいパスワード（6文字以上）"
+              required
+              minLength={6}
+              className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
+            />
+            {loginError && <p className="text-xs text-wabi-timer">{loginError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="px-3 py-1.5 text-xs bg-wabi-accent/20 text-wabi-text rounded-lg hover:bg-wabi-accent/30 cursor-pointer disabled:opacity-50"
+              >
+                {loginLoading ? '設定中...' : 'パスワードを設定'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setView('idle'); setLoginError(''); setNewPassword('') }}
+                className="text-xs text-wabi-text-muted hover:text-wabi-text cursor-pointer"
+              >
+                キャンセル
+              </button>
+            </div>
+          </form>
+        </div>
+      )
+    }
+
     return (
       <div className="space-y-2">
         <p className="text-sm text-wabi-text">{userEmail}</p>
         <p className="text-xs text-wabi-text-muted">クラウド同期が有効です</p>
-        <button
-          onClick={onLogout}
-          className="text-sm text-wabi-timer hover:text-wabi-text cursor-pointer"
-        >
-          ログアウト
-        </button>
+        {loginSuccess && <p className="text-xs text-wabi-check">{loginSuccess}</p>}
+        <div className="flex gap-3">
+          <button
+            onClick={() => { setView('set-password'); setLoginError(''); setLoginSuccess('') }}
+            className="text-xs text-wabi-accent hover:text-wabi-text cursor-pointer"
+          >
+            パスワード変更
+          </button>
+          <button
+            onClick={onLogout}
+            className="text-xs text-wabi-timer hover:text-wabi-text cursor-pointer"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
     )
   }
 
-  if (!showLogin) {
+  // OTP検証画面
+  if (view === 'otp-verify') {
+    const handleVerifyOtp = async (e: React.FormEvent) => {
+      e.preventDefault()
+      setLoginError('')
+      setLoginLoading(true)
+      const supabase = getSupabase()
+      if (!supabase) return
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          email: loginEmail,
+          token: otpCode.trim(),
+          type: 'email',
+        })
+        if (error) {
+          setLoginError('コードが正しくありません')
+        }
+        // onAuthStateChange で view が idle に戻る
+      } finally {
+        setLoginLoading(false)
+      }
+    }
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-wabi-text-muted">
+          <span className="font-medium text-wabi-text">{loginEmail}</span> に送信された6桁のコードを入力
+        </p>
+        {pendingPasswordSetRef.current && (
+          <p className="text-[10px] text-wabi-accent">本人確認後にパスワードを設定します</p>
+        )}
+        <form onSubmit={handleVerifyOtp} className="space-y-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="one-time-code"
+            autoFocus
+            value={otpCode}
+            onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+            placeholder="6桁の認証コード"
+            required
+            maxLength={8}
+            className="w-full px-3 py-2 text-xs text-center tracking-[0.3em] font-mono border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted placeholder:tracking-normal focus:outline-none focus:border-wabi-accent"
+          />
+          {loginError && <p className="text-xs text-wabi-timer">{loginError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={loginLoading || otpCode.length < 6}
+              className="px-3 py-1.5 text-xs bg-wabi-accent/20 text-wabi-text rounded-lg hover:bg-wabi-accent/30 cursor-pointer disabled:opacity-50"
+            >
+              {loginLoading ? '確認中...' : '確認'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setView('form'); setOtpCode(''); setLoginError(''); setPendingPasswordSet(false) }}
+              className="text-xs text-wabi-text-muted hover:text-wabi-text cursor-pointer"
+            >
+              戻る
+            </button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
+  // 未ログイン: ログインボタン表示
+  if (view === 'idle') {
     return (
       <div className="space-y-2">
         <p className="text-xs text-wabi-text-muted">ログインするとデータがクラウドに同期されます</p>
         <button
-          onClick={() => setShowLogin(true)}
+          onClick={() => setView('form')}
           className="text-sm text-wabi-accent hover:text-wabi-text cursor-pointer"
         >
           ログイン
@@ -501,7 +644,8 @@ function AccountSection({ onLogout }: { onLogout: () => void }) {
     )
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // パスワードログイン
+  const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginError('')
     setLoginLoading(true)
@@ -520,43 +664,88 @@ function AccountSection({ onLogout }: { onLogout: () => void }) {
     }
   }
 
+  // OTPコード送信
+  const handleSendOtp = async (forPasswordSet = false) => {
+    setLoginError('')
+    if (!loginEmail) {
+      setLoginError('メールアドレスを入力してください')
+      return
+    }
+    setLoginLoading(true)
+    const supabase = getSupabase()
+    if (!supabase) return
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: loginEmail,
+        options: { shouldCreateUser: true },
+      })
+      if (error) { setLoginError(error.message); return }
+      setPendingPasswordSet(forPasswordSet)
+      setOtpCode('')
+      setView('otp-verify')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  // ログインフォーム
   return (
-    <form onSubmit={handleLogin} className="space-y-2">
-      <input
-        type="email"
-        value={loginEmail}
-        onChange={e => setLoginEmail(e.target.value)}
-        placeholder="メールアドレス"
-        required
-        className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
-      />
-      <input
-        type="password"
-        value={loginPassword}
-        onChange={e => setLoginPassword(e.target.value)}
-        placeholder="パスワード"
-        required
-        minLength={6}
-        className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
-      />
-      {loginError && <p className="text-xs text-wabi-timer">{loginError}</p>}
-      <div className="flex gap-2">
+    <div className="space-y-2">
+      <form onSubmit={handlePasswordLogin} className="space-y-2">
+        <input
+          type="email"
+          value={loginEmail}
+          onChange={e => setLoginEmail(e.target.value)}
+          placeholder="メールアドレス"
+          required
+          className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
+        />
+        <input
+          type="password"
+          value={loginPassword}
+          onChange={e => setLoginPassword(e.target.value)}
+          placeholder="パスワード"
+          required
+          minLength={6}
+          className="w-full px-3 py-2 text-xs border border-wabi-border rounded-lg bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
+        />
+        {loginError && <p className="text-xs text-wabi-timer">{loginError}</p>}
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={loginLoading}
+            className="px-3 py-1.5 text-xs bg-wabi-accent/20 text-wabi-text rounded-lg hover:bg-wabi-accent/30 cursor-pointer disabled:opacity-50"
+          >
+            {loginLoading ? '処理中...' : 'ログイン'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSendOtp(false)}
+            disabled={loginLoading || !loginEmail}
+            className="px-3 py-1.5 text-xs border border-wabi-border text-wabi-text rounded-lg hover:bg-wabi-surface cursor-pointer disabled:opacity-50"
+          >
+            認証コードでログイン
+          </button>
+          <button
+            type="button"
+            onClick={() => { setView('idle'); setLoginError(''); setLoginPassword('') }}
+            className="text-xs text-wabi-text-muted hover:text-wabi-text cursor-pointer"
+          >
+            キャンセル
+          </button>
+        </div>
+      </form>
+      <p className="text-[10px] text-wabi-text-muted">
+        アカウントがなければ認証コードで自動作成されます。
         <button
-          type="submit"
-          disabled={loginLoading}
-          className="px-3 py-1.5 text-xs bg-wabi-accent/20 text-wabi-text rounded-lg hover:bg-wabi-accent/30 cursor-pointer disabled:opacity-50"
+          onClick={() => handleSendOtp(true)}
+          disabled={loginLoading || !loginEmail}
+          className="text-wabi-accent hover:text-wabi-text cursor-pointer disabled:opacity-50 ml-1"
         >
-          {loginLoading ? '処理中…' : 'ログイン'}
+          パスワードを設定/変更
         </button>
-        <button
-          type="button"
-          onClick={() => { setShowLogin(false); setLoginError('') }}
-          className="text-xs text-wabi-text-muted hover:text-wabi-text cursor-pointer"
-        >
-          キャンセル
-        </button>
-      </div>
-    </form>
+      </p>
+    </div>
   )
 }
 

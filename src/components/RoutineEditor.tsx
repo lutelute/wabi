@@ -49,6 +49,8 @@ export function RoutineEditor() {
       />
       <p className="text-xs text-wabi-text-muted">
         ## でフェーズを区切り、- で項目を書く。時刻や所要時間は任意: - 06:00 ストレッチ 10min
+        <br />
+        @mental を末尾に付けると振り返り必須の内面ワークに: - 静かに座る 10min @mental
       </p>
     </div>
   )

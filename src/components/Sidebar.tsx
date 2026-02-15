@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useRoutines } from '../contexts/RoutineContext'
+import { ConceptRoutines } from './ConceptRoutines'
+import { MonthlyCalendar } from './MonthlyCalendar'
 
 export function Sidebar() {
   const { routines, selectedId, selectRoutine, createRoutine, deleteRoutine, renameRoutine } = useRoutines()
@@ -27,6 +29,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 bg-wabi-surface border-r border-wabi-border flex flex-col pt-12">
+      {/* Section 1: ルーティン */}
       <div className="px-4 py-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-wabi-text-muted">ルーティン</h2>
         <button
@@ -38,7 +41,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2">
+      <nav className="overflow-y-auto px-2">
         {routines.map(r => (
           <div
             key={r.id}
@@ -103,6 +106,16 @@ export function Sidebar() {
           />
         </div>
       )}
+
+      {/* Section 2: ひとこと */}
+      <div className="border-t border-wabi-border px-3 py-3">
+        <ConceptRoutines />
+      </div>
+
+      {/* Section 3: カレンダー */}
+      <div className="border-t border-wabi-border px-2 py-3 mt-auto">
+        <MonthlyCalendar compact />
+      </div>
     </aside>
   )
 }

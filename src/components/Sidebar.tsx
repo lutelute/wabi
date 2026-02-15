@@ -28,7 +28,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-56 shrink-0 bg-wabi-surface border-r border-wabi-border flex flex-col pt-12">
+    <aside className="w-56 md:w-56 shrink-0 bg-wabi-surface border-r border-wabi-border flex flex-col pt-4 md:pt-12 h-full">
       {/* Section 1: ルーティン */}
       <div className="px-4 py-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-wabi-text-muted">ルーティン</h2>

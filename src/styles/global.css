@@ -24,11 +24,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* macOS titlebar drag region */
+/* macOS titlebar drag region (Electron only) */
 .titlebar-drag {
   -webkit-app-region: drag;
 }
 
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
+}
+
+/* Safe area for notch devices */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

@@ -1,18 +1,24 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { getSupabase, isCloudEnabled } from '../sync/supabaseClient'
 
+type AuthMethod = 'magic' | 'password'
+type AuthMode = 'login' | 'signup'
+
 interface Props {
   children: ReactNode
 }
 
 export function AuthGate({ children }: Props) {
-  const [state, setState] = useState<'loading' | 'login' | 'sent' | 'authenticated'>('loading')
+  const [state, setState] = useState<'loading' | 'form' | 'sent' | 'authenticated'>('loading')
+  const [method, setMethod] = useState<AuthMethod>('password')
+  const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const isElectron = !!window.electronAPI
 
   useEffect(() => {
-    // Electron版 or Cloud未設定 → ログインスキップ
     if (isElectron || !isCloudEnabled()) {
       setState('authenticated')
       return
@@ -25,31 +31,44 @@ export function AuthGate({ children }: Props) {
     }
 
     supabase.auth.getSession().then(({ data }) => {
-      setState(data.session ? 'authenticated' : 'login')
+      setState(data.session ? 'authenticated' : 'form')
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState(session ? 'authenticated' : 'login')
+      setState(session ? 'authenticated' : 'form')
     })
 
     return () => subscription.unsubscribe()
   }, [isElectron])
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
     const supabase = getSupabase()
     if (!supabase) return
 
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin + '/wabi/' },
-    })
-
-    if (err) {
-      setError(err.message)
-    } else {
-      setState('sent')
+    try {
+      if (method === 'magic') {
+        const { error: err } = await supabase.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: window.location.origin + '/wabi/' },
+        })
+        if (err) { setError(err.message); return }
+        setState('sent')
+      } else if (mode === 'signup') {
+        const { error: err } = await supabase.auth.signUp({ email, password })
+        if (err) { setError(err.message); return }
+        // autoconfirmが有効なので即ログイン状態になる
+      } else {
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+        if (err) {
+          setError(err.message === 'Invalid login credentials' ? 'メールアドレスまたはパスワードが違います' : err.message)
+          return
+        }
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -75,7 +94,7 @@ export function AuthGate({ children }: Props) {
             メール内のリンクをクリックしてログインしてください。
           </p>
           <button
-            onClick={() => setState('login')}
+            onClick={() => setState('form')}
             className="text-sm text-wabi-accent hover:text-wabi-text cursor-pointer"
           >
             戻る
@@ -85,7 +104,6 @@ export function AuthGate({ children }: Props) {
     )
   }
 
-  // login画面
   return (
     <div className="h-screen flex items-center justify-center bg-wabi-bg">
       <div className="w-full max-w-sm mx-4 space-y-6">
@@ -94,17 +112,47 @@ export function AuthGate({ children }: Props) {
           <p className="text-sm text-wabi-text-muted">ルーティン管理</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
+        {/* 方式切替タブ */}
+        <div className="flex rounded-xl bg-wabi-surface border border-wabi-border overflow-hidden">
+          <button
+            onClick={() => { setMethod('password'); setError('') }}
+            className={`flex-1 py-2 text-xs cursor-pointer transition-colors ${
+              method === 'password' ? 'bg-wabi-accent/20 text-wabi-text font-medium' : 'text-wabi-text-muted'
+            }`}
+          >
+            パスワード
+          </button>
+          <button
+            onClick={() => { setMethod('magic'); setError('') }}
+            className={`flex-1 py-2 text-xs cursor-pointer transition-colors ${
+              method === 'magic' ? 'bg-wabi-accent/20 text-wabi-text font-medium' : 'text-wabi-text-muted'
+            }`}
+          >
+            マジックリンク
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="メールアドレス"
+            required
+            className="w-full px-4 py-3 text-sm border border-wabi-border rounded-xl bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
+          />
+
+          {method === 'password' && (
             <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="メールアドレス"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="パスワード"
               required
+              minLength={6}
               className="w-full px-4 py-3 text-sm border border-wabi-border rounded-xl bg-wabi-surface text-wabi-text placeholder:text-wabi-text-muted focus:outline-none focus:border-wabi-accent"
             />
-          </div>
+          )}
 
           {error && (
             <p className="text-xs text-wabi-timer">{error}</p>
@@ -112,15 +160,30 @@ export function AuthGate({ children }: Props) {
 
           <button
             type="submit"
-            className="w-full py-3 text-sm font-medium bg-wabi-accent/20 text-wabi-text rounded-xl hover:bg-wabi-accent/30 transition-colors cursor-pointer"
+            disabled={loading}
+            className="w-full py-3 text-sm font-medium bg-wabi-accent/20 text-wabi-text rounded-xl hover:bg-wabi-accent/30 transition-colors cursor-pointer disabled:opacity-50"
           >
-            マジックリンクでログイン
+            {loading ? '処理中…' : method === 'magic'
+              ? 'ログインリンクを送信'
+              : mode === 'signup' ? 'アカウント作成' : 'ログイン'}
           </button>
         </form>
 
-        <p className="text-xs text-wabi-text-muted text-center">
-          パスワード不要。メールにログインリンクが届きます。
-        </p>
+        {method === 'password' && (
+          <p className="text-xs text-wabi-text-muted text-center">
+            {mode === 'login' ? (
+              <>アカウントがない？ <button onClick={() => { setMode('signup'); setError('') }} className="text-wabi-accent hover:text-wabi-text cursor-pointer">新規登録</button></>
+            ) : (
+              <>アカウントがある？ <button onClick={() => { setMode('login'); setError('') }} className="text-wabi-accent hover:text-wabi-text cursor-pointer">ログイン</button></>
+            )}
+          </p>
+        )}
+
+        {method === 'magic' && (
+          <p className="text-xs text-wabi-text-muted text-center">
+            パスワード不要。メールにログインリンクが届きます。
+          </p>
+        )}
       </div>
     </div>
   )

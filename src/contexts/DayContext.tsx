@@ -52,6 +52,7 @@ interface DayContextValue {
   addCheckIn: (stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string) => void
   markRestTaken: () => void
   closeDay: () => void
+  reopenDay: () => void
 }
 
 const DayContext = createContext<DayContextValue | null>(null)
@@ -144,6 +145,7 @@ export function DayProvider({ children }: { children: ReactNode }) {
   }, [])
   const markRestTaken = useCallback(() => setRestTaken(true), [])
   const closeDay = useCallback(() => setClosedAt(new Date().toISOString()), [])
+  const reopenDay = useCallback(() => setClosedAt(undefined), [])
   const addCustomConcept = useCallback((text: string) => {
     const trimmed = text.trim()
     if (trimmed) setCustomConcepts(prev => [...prev, trimmed])
@@ -152,7 +154,7 @@ export function DayProvider({ children }: { children: ReactNode }) {
   return (
     <DayContext.Provider value={{
       date, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, customConcepts, checkIns, restTaken, closedAt,
-      addStamina, addMental, addMood, setDailyNotes, addCustomConcept, addCheckIn, markRestTaken, closeDay,
+      addStamina, addMental, addMood, setDailyNotes, addCustomConcept, addCheckIn, markRestTaken, closeDay, reopenDay,
     }}>
       {children}
     </DayContext.Provider>

@@ -44,7 +44,7 @@ export default defineConfig(async () => {
     base: isWeb ? '/wabi/' : './',
     server: {
       port: 5177,
-      strictPort: false,
+      strictPort: true,
     },
     build: {
       outDir: 'dist',

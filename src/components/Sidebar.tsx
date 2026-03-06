@@ -16,6 +16,7 @@ export function Sidebar() {
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const sidebarRef = useRef<HTMLElement>(null)
 
   // リサイズ
@@ -111,8 +112,22 @@ export function Sidebar() {
     return items.length > 0 && items.some(item => isItemAdded(item.id)) && !items.every(item => isItemAdded(item.id))
   }
 
+  const toggleExpanded = (id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const handleRoutineClick = (r: Parameters<typeof addAction>[1]) => {
     selectRoutine(r.id)
+    toggleExpanded(r.id)
+  }
+
+  const handleToggleAll = (e: React.MouseEvent, r: Parameters<typeof addAction>[1]) => {
+    e.stopPropagation()
     const items = r.phases.flatMap(p => p.items)
     if (items.length === 0) return
     if (isRoutineFullyAdded(r)) {
@@ -145,9 +160,12 @@ export function Sidebar() {
 
       <nav className="overflow-y-auto px-2 flex-1">
         {routines.map(r => {
-          const hasItems = r.phases.flatMap(p => p.items).length > 0
+          const allItems = r.phases.flatMap(p => p.items)
+          const hasItems = allItems.length > 0
           const fullyAdded = hasItems && isRoutineFullyAdded(r)
           const partiallyAdded = hasItems && isRoutinePartiallyAdded(r)
+          const expanded = expandedIds.has(r.id)
+          const addedCount = allItems.filter(i => isItemAdded(i.id)).length
 
           return (
             <div key={r.id}>
@@ -183,6 +201,16 @@ export function Sidebar() {
                   />
                 ) : (
                   <>
+                    {/* 展開矢印 */}
+                    {hasItems && (
+                      <svg
+                        width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
+                        className={`shrink-0 mr-1.5 text-wabi-text-muted/40 transition-transform ${expanded ? 'rotate-90' : ''}`}
+                      >
+                        <path d="M3 1.5L7 5L3 8.5" />
+                      </svg>
+                    )}
+
                     {/* ルーティン名 + マーカーハイライト */}
                     <span className="flex-1 truncate relative">
                       {r.name}
@@ -194,18 +222,21 @@ export function Sidebar() {
                       )}
                     </span>
 
-                    {/* 追加状態インジケーター */}
-                    {fullyAdded && (
-                      <span className="text-[10px] text-wabi-accent shrink-0 ml-1">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </span>
-                    )}
-                    {partiallyAdded && (
-                      <span className="text-[9px] text-wabi-text-muted/40 shrink-0 ml-1 font-mono">
-                        {r.phases.flatMap(p => p.items).filter(i => isItemAdded(i.id)).length}/{r.phases.flatMap(p => p.items).length}
-                      </span>
+                    {/* 全追加/全外しトグル */}
+                    {hasItems && (
+                      <button
+                        onClick={e => handleToggleAll(e, r)}
+                        className={`shrink-0 ml-1 text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                          fullyAdded
+                            ? 'text-wabi-accent bg-wabi-accent/10 hover:bg-wabi-accent/20'
+                            : partiallyAdded
+                              ? 'text-wabi-text-muted/60 hover:text-wabi-accent hover:bg-wabi-accent/10'
+                              : 'text-wabi-text-muted/30 hover:text-wabi-accent hover:bg-wabi-accent/10'
+                        }`}
+                        title={fullyAdded ? '全て外す' : '全て入れる'}
+                      >
+                        {fullyAdded ? '全✓' : partiallyAdded ? `${addedCount}/${allItems.length}` : '全入'}
+                      </button>
                     )}
 
                     {routines.length > 1 && (
@@ -223,6 +254,51 @@ export function Sidebar() {
                   </>
                 )}
               </div>
+
+              {/* 展開時: フェーズ + アイテム一覧 */}
+              {expanded && hasItems && (
+                <div className="ml-3 mr-1 mb-1">
+                  {r.phases.map(phase => (
+                    <div key={phase.id}>
+                      {phase.title && (
+                        <div className="text-[9px] font-medium text-wabi-text-muted/50 px-2 pt-1.5 pb-0.5">
+                          {phase.title}
+                        </div>
+                      )}
+                      {phase.items.map(item => {
+                        const added = isItemAdded(item.id)
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => handleItemClick(item, r, phase)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer text-[11px] transition-colors ${
+                              added
+                                ? 'text-wabi-accent bg-wabi-accent/5'
+                                : 'text-wabi-text-muted/60 hover:bg-wabi-bg/50 hover:text-wabi-text-muted'
+                            }`}
+                          >
+                            <span className={`shrink-0 w-3 h-3 rounded-full border flex items-center justify-center transition-colors ${
+                              added ? 'border-wabi-accent bg-wabi-accent' : 'border-wabi-border'
+                            }`}>
+                              {added && (
+                                <svg width="7" height="6" viewBox="0 0 10 8" fill="none">
+                                  <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              )}
+                            </span>
+                            <span className="flex-1 truncate">{item.title}</span>
+                            {item.duration && (
+                              <span className="text-[9px] text-wabi-text-muted/30 shrink-0 font-mono">{item.duration}m</span>
+                            )}
+                            {item.isMental && <span className="text-[8px] text-amber-600/40 shrink-0">m</span>}
+                            {item.isRest && <span className="text-[8px] text-indigo-500/40 shrink-0">r</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

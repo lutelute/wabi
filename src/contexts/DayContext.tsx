@@ -71,12 +71,23 @@ export function DayProvider({ children }: { children: ReactNode }) {
   const [closedAt, setClosedAt] = useState<string | undefined>(undefined)
   const [loaded, setLoaded] = useState(false)
 
-  // 日付チェック
+  // 日付チェック + 自動クローズ（朝5時）
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = todayString()
-      if (now !== date) {
-        setDate(now)
+    function tick() {
+      const now = new Date()
+      const today = todayString()
+
+      // 朝5時を過ぎて前日分が未クローズならば自動クローズ
+      if (now.getHours() >= 5 && today !== date && !closedAt && loaded) {
+        const hasActivity = checkIns.length > 0 || moodLog.length > 0 ||
+          staminaLog.length > 0 || mentalLog.length > 0
+        if (hasActivity) {
+          setClosedAt(new Date(date + 'T23:59:59').toISOString())
+        }
+      }
+
+      if (today !== date) {
+        setDate(today)
         setStaminaLog([]); setMentalLog([])
         setWaveLog([]); setBodyTempLog([])
         setMoodLog([]); setDailyNotes('')
@@ -84,9 +95,11 @@ export function DayProvider({ children }: { children: ReactNode }) {
         setCheckIns([]); setRestTaken(false); setClosedAt(undefined)
         setLoaded(false)
       }
-    }, 30_000)
+    }
+
+    const interval = setInterval(tick, 30_000)
     return () => clearInterval(interval)
-  }, [date])
+  }, [date, closedAt, loaded, checkIns.length, moodLog.length, staminaLog.length, mentalLog.length])
 
   // ロード
   useEffect(() => {

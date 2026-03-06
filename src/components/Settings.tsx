@@ -411,7 +411,7 @@ export function Settings({ onClose }: Props) {
           {/* バージョン + アップデート */}
           <div className="pt-2 border-t border-wabi-border/50 space-y-2">
             <p className="text-xs text-wabi-text-muted text-center">
-              侘び v1.3.2
+              侘び v1.3.3
             </p>
             {window.electronAPI?.checkForUpdates && (
               <div className="flex flex-col items-center gap-1.5">

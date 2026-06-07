@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { storage } from '../storage'
-import { wabiToday } from '../utils/wabiDate'
+import { wabiToday, wabiRecentDates } from '../utils/wabiDate'
 import type { Mood, MoodEntry, CheckIn } from '../types/routine'
 
 function nowTime(): string {
@@ -78,6 +78,28 @@ export function DayProvider({ children }: { children: ReactNode }) {
       ...(closedAt ? { closedAt } : {}),
     } : null
   })
+
+  // 起動時: 過去の未クローズ日を静かに閉じる
+  // （アプリを閉じたまま朝5時を跨ぐと tick が走らないため、ここで拾う）
+  useEffect(() => {
+    (async () => {
+      const today = wabiToday()
+      for (const d of wabiRecentDates(8)) {
+        if (d >= today) continue
+        const key = `day:${d}`
+        const saved = await storage.getDayState(key)
+        if (!saved || saved.closedAt) continue
+        const hasActivity = (saved.checkIns?.length ?? 0) > 0 || (saved.moodLog?.length ?? 0) > 0 ||
+          (saved.staminaLog?.length ?? 0) > 0 || (saved.mentalLog?.length ?? 0) > 0
+        if (hasActivity) {
+          await storage.saveDayState(key, {
+            ...saved,
+            closedAt: new Date(d + 'T23:59:59').toISOString(),
+          })
+        }
+      }
+    })()
+  }, [])
 
   // 日付チェック: wabiの一日は朝5時で切り替わる
   useEffect(() => {

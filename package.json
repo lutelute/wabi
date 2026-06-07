@@ -1,6 +1,6 @@
 {
   "name": "wabi",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "侘び - ルーティン管理アプリ",
   "main": "dist-electron/main.js",
   "scripts": {

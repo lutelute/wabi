@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { storage } from '../storage'
 import { useRoutines } from '../contexts/RoutineContext'
+import { wabiToday } from '../utils/wabiDate'
 import type { CalendarDayData, Mood, ExecutionState } from '../types/routine'
 import type { DayState } from '../contexts/DayContext'
 
@@ -31,10 +32,7 @@ export function MonthlyCalendar({ compact = false }: { compact?: boolean } = {})
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [selectedDayDetail, setSelectedDayDetail] = useState<{ exec: ExecutionState | null; day: DayState | null } | null>(null)
 
-  const todayStr = useMemo(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }, [])
+  const todayStr = useMemo(() => wabiToday(), [])
 
   // 月データ読み込み
   useEffect(() => {

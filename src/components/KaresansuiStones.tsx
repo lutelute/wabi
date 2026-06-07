@@ -2,36 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useActionList } from '../contexts/ActionListContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { storage } from '../storage'
-
-function todayString(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function getWeekDates(): string[] {
-  const today = new Date()
-  const day = today.getDay()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
-  const dates: string[] = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    dates.push(d.toISOString().slice(0, 10))
-  }
-  return dates
-}
-
-function getMonthDates(): string[] {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = today.getMonth()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const dates: string[] = []
-  for (let i = 1; i <= daysInMonth; i++) {
-    dates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`)
-  }
-  return dates
-}
+import { wabiToday, wabiWeekDates, wabiMonthDates } from '../utils/wabiDate'
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -245,9 +216,9 @@ export function KaresansuiStones() {
   // 週・月の履歴ロード
   useEffect(() => {
     async function loadHistory() {
-      const today = todayString()
-      const weekDates = getWeekDates()
-      const monthDates = getMonthDates()
+      const today = wabiToday()
+      const weekDates = wabiWeekDates()
+      const monthDates = wabiMonthDates()
 
       let weekTotal = 0, weekDays = 0
       let monthTotal = 0, monthDays = 0

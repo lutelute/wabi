@@ -17,6 +17,7 @@ import { DayClosing } from './components/DayClosing'
 import { ExportButton } from './components/ExportButton'
 import { Settings } from './components/Settings'
 import { AuthGate } from './components/AuthGate'
+import { WeeklyReview } from './components/WeeklyReview'
 import { storage } from './storage'
 
 export type AppMode = 'edit' | 'execute'
@@ -27,6 +28,7 @@ const isDev = import.meta.env.DEV
 export default function App() {
   const [mode, setMode] = useState<AppMode>('execute')
   const [showSettings, setShowSettings] = useState(false)
+  const [showWeekly, setShowWeekly] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
@@ -78,6 +80,17 @@ export default function App() {
                     </button>
                     <ModeToggle mode={mode} onModeChange={setMode} />
                     <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={() => setShowWeekly(true)}
+                        className="text-wabi-text-muted/50 hover:text-wabi-text-muted cursor-pointer px-1.5 py-1 rounded transition-colors hover:bg-wabi-surface"
+                        title="庭を眺める（7日の振り返り）"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2">
+                          <circle cx="10" cy="10" r="2.5" />
+                          <circle cx="10" cy="10" r="5.5" opacity="0.6" />
+                          <circle cx="10" cy="10" r="8.5" opacity="0.3" />
+                        </svg>
+                      </button>
                       <ExportButton />
                       {isDev && (
                         <span className="px-1.5 py-0.5 text-[10px] font-bold bg-wabi-timer/20 text-wabi-timer rounded uppercase tracking-wider">dev</span>
@@ -128,6 +141,7 @@ export default function App() {
               </div>
 
               {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+              {showWeekly && <WeeklyReview onClose={() => setShowWeekly(false)} />}
             </ReminderProvider>
           </SettingsProvider>
         </ActionListProvider>

@@ -2,11 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, t
 import { nanoid } from 'nanoid'
 import { storage } from '../storage'
 import { useRoutines } from './RoutineContext'
+import { wabiToday } from '../utils/wabiDate'
 import type { Reminder, ReminderInstance } from '../types/routine'
-
-function todayString(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function nowHHMM(): string {
   const now = new Date()
@@ -28,7 +25,7 @@ const ReminderContext = createContext<ReminderContextValue | null>(null)
 export function ReminderProvider({ children }: { children: ReactNode }) {
   const { selected } = useRoutines()
   const [reminders, setReminders] = useState<Reminder[]>(() => storage.getReminders())
-  const [instances, setInstances] = useState<ReminderInstance[]>(() => storage.getReminderState(todayString()))
+  const [instances, setInstances] = useState<ReminderInstance[]>(() => storage.getReminderState(wabiToday()))
   const [now, setNow] = useState(nowHHMM)
 
   // 60秒ポーリング
@@ -70,7 +67,7 @@ export function ReminderProvider({ children }: { children: ReactNode }) {
   }, [reminders])
 
   useEffect(() => {
-    storage.saveReminderState(todayString(), instances)
+    storage.saveReminderState(wabiToday(), instances)
   }, [instances])
 
   const pendingReminders = useMemo(() => {
@@ -95,7 +92,7 @@ export function ReminderProvider({ children }: { children: ReactNode }) {
           if (existing) {
             return prev.map(i => i.reminderId === r.id ? { ...i, fired: true } : i)
           }
-          return [...prev, { reminderId: r.id, date: todayString(), fired: true, dismissed: false }]
+          return [...prev, { reminderId: r.id, date: wabiToday(), fired: true, dismissed: false }]
         })
       }
     }
@@ -128,7 +125,7 @@ export function ReminderProvider({ children }: { children: ReactNode }) {
       if (existing) {
         return prev.map(i => i.reminderId === reminderId ? { ...i, dismissed: true } : i)
       }
-      return [...prev, { reminderId, date: todayString(), fired: true, dismissed: true }]
+      return [...prev, { reminderId, date: wabiToday(), fired: true, dismissed: true }]
     })
   }, [])
 

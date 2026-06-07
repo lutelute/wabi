@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useActionList } from '../contexts/ActionListContext'
 import { storage } from '../storage'
+import { wabiToday, wabiWeekDates } from '../utils/wabiDate'
 import type { DailyAction } from '../types/routine'
 
 function formatTime(): string {
@@ -16,20 +17,6 @@ function addMinutes(timeStr: string, minutes: number): string {
   return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`
 }
 
-function getWeekDates(): string[] {
-  const today = new Date()
-  const day = today.getDay()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
-  const dates: string[] = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    dates.push(d.toISOString().slice(0, 10))
-  }
-  return dates
-}
-
 export function NowFocus() {
   const { actions, checkedItems, timerState, progress } = useActionList()
   const [time, setTime] = useState(formatTime)
@@ -43,8 +30,8 @@ export function NowFocus() {
   // 今週のほどき数をロード
   useEffect(() => {
     async function loadWeek() {
-      const today = new Date().toISOString().slice(0, 10)
-      const dates = getWeekDates()
+      const today = wabiToday()
+      const dates = wabiWeekDates()
       let total = 0
 
       for (const date of dates) {

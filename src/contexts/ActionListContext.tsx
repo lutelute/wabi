@@ -1,11 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { nanoid } from 'nanoid'
 import { storage } from '../storage'
+import { wabiToday } from '../utils/wabiDate'
 import type { DailyAction, DailyActionState, TimerState, Mood, MentalCompletion, RoutineItem, Routine, RoutinePhase } from '../types/routine'
-
-function todayString(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 /** NaN/Infinity/負数を安全に除去するヘルパー */
 function safeWeight(value: unknown, fallback: number): number {
@@ -62,13 +59,13 @@ export function ActionListProvider({ children }: { children: ReactNode }) {
   const [mentalCompletions, setMentalCompletions] = useState<MentalCompletion[]>([])
   const [declined, setDeclined] = useState('')
   const [dismissedConcepts, setDismissedConcepts] = useState<string[]>([])
-  const [date, setDate] = useState(todayString)
+  const [date, setDate] = useState(wabiToday)
   const [loaded, setLoaded] = useState(false)
 
-  // 日付チェック
+  // 日付チェック（wabiの一日は朝5時で切り替わる）
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = todayString()
+      const now = wabiToday()
       if (now !== date) {
         setDate(now)
         setActions([]); setCheckedItems({}); setItemWeights({})

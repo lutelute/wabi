@@ -63,10 +63,10 @@ export interface MoodEntry {
 
 export interface CheckIn {
   time: string              // "14:32"
-  stamina: number           // 0-100 (体力: 満↔尽)
-  mental: number            // 0-100 (心: 沈む↔浮く)
-  wave: number              // 0-100 (波: 凪↔荒)
-  bodyTemp: number          // 0-100 (体温: 冷↔熱)
+  stamina: number           // 0-100 (体力: 尽0↔100満。高いほど残っている)
+  mental: number            // 0-100 (淀: 濁0↔100澄。高いほど澄んでいる)
+  wave: number              // 0-100 (波: 凪0↔100荒)
+  bodyTemp: number          // 0-100 (体温: 冷0↔100熱)
   tags: string[]            // 気持ちタグ
   comment: string           // 自由コメント
 }
@@ -181,6 +181,7 @@ export interface AppSettings {
   conceptRoutinesEnabled: boolean
   reminderSoundEnabled: boolean
   obsidianVaultPath: string    // Obsidian Vaultのデイリーノートフォルダパス（空=無効）
+  customFeelingTags: string[]  // ユーザーが育てる気持ちタグ（日をまたいで永続）
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -193,6 +194,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   conceptRoutinesEnabled: true,
   reminderSoundEnabled: true,
   obsidianVaultPath: '',
+  customFeelingTags: [],
 }
 
 export interface BackupData {

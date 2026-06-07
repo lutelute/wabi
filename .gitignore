@@ -3,6 +3,8 @@ dist
 dist-electron
 release
 *.log
+logs/
 .claude/
 .env
 .env.local
+supabase/.temp/

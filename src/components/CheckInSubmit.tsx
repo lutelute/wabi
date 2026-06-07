@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useDay } from '../contexts/DayContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { MOOD_OPTIONS } from '../types/routine'
 import type { Mood, MoodEntry, CheckIn } from '../types/routine'
 
@@ -61,13 +62,14 @@ function buildCheckInText(checkIns: CheckIn[], moodLog: MoodEntry[], dailyNotes:
 interface LevelEntry { level: number; time: string }
 
 export function CheckInSubmit() {
-  const { checkIns, addCheckIn, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, addMood, restTaken } = useDay()
+  const { date, checkIns, addCheckIn, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, addMood, restTaken } = useDay()
+  const { settings, updateSetting } = useSettings()
+  const customFeelingTags = settings.customFeelingTags ?? []
   const [comment, setComment] = useState('')
   const [mental, setMental] = useState(50)
   const [wave, setWave] = useState(30)
   const [bodyTemp, setBodyTemp] = useState(50)
   const [tags, setTags] = useState<string[]>([])
-  const [customFeelingTags, setCustomFeelingTags] = useState<string[]>([])
   const [newTagInput, setNewTagInput] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -150,13 +152,12 @@ export function CheckInSubmit() {
   }, [stamina, mental, wave, bodyTemp, tags, comment, addCheckIn])
 
   const handleCopy = useCallback(() => {
-    const date = new Date().toISOString().slice(0, 10)
     const text = buildCheckInText(checkIns, moodLog, dailyNotes, date)
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
-  }, [checkIns, moodLog, dailyNotes])
+  }, [checkIns, moodLog, dailyNotes, date])
 
   return (
     <div className="px-1">
@@ -188,8 +189,8 @@ export function CheckInSubmit() {
               gradientTo="#a8c89a"
               trackColor="rgba(138,170,122,0.1)"
               onPointerDown={e => handleBarPointerDown(e, staminaBarRef, setStamina)}
-              labelLeft="満"
-              labelRight="尽"
+              labelLeft="尽"
+              labelRight="満"
               trailing={
                 <button
                   onClick={() => {
@@ -272,7 +273,7 @@ export function CheckInSubmit() {
         <div>
           <span className="text-wabi-text-muted block mb-1.5">気持ち</span>
           <div className="flex flex-wrap gap-1.5">
-            {[...DEFAULT_FEELING_TAGS, ...customFeelingTags].map(tag => (
+            {DEFAULT_FEELING_TAGS.map(tag => (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
@@ -285,12 +286,36 @@ export function CheckInSubmit() {
                 {tag}
               </button>
             ))}
+            {customFeelingTags.map(tag => (
+              <span
+                key={tag}
+                className={`group inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] transition-all duration-150 cursor-pointer ${
+                  tags.includes(tag)
+                    ? 'bg-wabi-text/10 text-wabi-text border border-wabi-text/20'
+                    : 'bg-wabi-bg text-wabi-text-muted hover:bg-wabi-border/30'
+                }`}
+                onClick={() => toggleTag(tag)}
+              >
+                {tag}
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    updateSetting('customFeelingTags', customFeelingTags.filter(t => t !== tag))
+                    setTags(prev => prev.filter(t => t !== tag))
+                  }}
+                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity text-[9px] -mr-0.5"
+                  title="このタグを手放す"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
             <form
               onSubmit={e => {
                 e.preventDefault()
                 const t = newTagInput.trim()
                 if (t && !DEFAULT_FEELING_TAGS.includes(t) && !customFeelingTags.includes(t)) {
-                  setCustomFeelingTags(prev => [...prev, t])
+                  updateSetting('customFeelingTags', [...customFeelingTags, t])
                   setTags(prev => [...prev, t])
                 }
                 setNewTagInput('')

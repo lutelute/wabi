@@ -4,6 +4,7 @@ import fs from 'fs'
 import crypto from 'crypto'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
+import { wabiToday } from '../src/utils/wabiDate'
 import type { Routine, ExecutionState, BackupData } from '../src/types/routine'
 
 interface StoreSchema {
@@ -101,11 +102,11 @@ function createWindow() {
     },
   })
 
-  const isDev = !!process.env.VITE_DEV_SERVER_URL
-  mainWindow.setTitle(isDev ? '侘び [DEV]' : '侘び')
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL
+  mainWindow.setTitle(devServerUrl ? '侘び [DEV]' : '侘び')
 
-  if (isDev) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
+  if (devServerUrl) {
+    mainWindow.loadURL(devServerUrl)
     mainWindow.webContents.openDevTools()
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
@@ -266,10 +267,6 @@ ipcMain.handle('backup:import', async () => {
 
 // ── Obsidian Integration ──
 
-function todayString(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function escapeYaml(s: string): string {
   if (!s) return '""'
   if (/[:#\[\]{}&*!|>'"%@`,\n]/.test(s) || s.trim() !== s) {
@@ -278,33 +275,42 @@ function escapeYaml(s: string): string {
   return s
 }
 
-function buildWabiYaml(date: string, routines: Routine[], executions: Record<string, ExecutionState>): string {
-  // 今日のルーティンを探す
-  const routine = routines[0] // メインルーティン
-  if (!routine) return ''
-
-  const execKey = `${routine.id}:${date}`
-  const exec = executions[execKey]
+function buildWabiYaml(date: string, executions: Record<string, ExecutionState>): string {
+  // 現行データモデル: アクションリスト (actions:{date}) + 日の状態 (day:{date})
+  const actionState = executions[`actions:${date}`] as any
   const dayState = executions[`day:${date}`] as any
 
-  const allItems = routine.phases.flatMap(p => p.items)
-  const checkedItems = exec?.checkedItems ?? {}
-  const doneCount = Object.values(checkedItems).filter(Boolean).length
-  const totalCount = allItems.length
+  const actions: any[] = actionState?.actions ?? []
+  const checkedItems: Record<string, boolean> = actionState?.checkedItems ?? {}
+  const doneCount = actions.filter(a => checkedItems[a.id]).length
+  const totalCount = actions.length
   const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0
+
+  if (totalCount === 0 && !dayState) return ''
 
   const lines: string[] = []
   lines.push('wabi:')
-  lines.push(`  routine: ${escapeYaml(routine.name)}`)
+
+  // 今日のアクションの出どころ（複数ルーティン対応）
+  const routineNames = [...new Set(actions.map(a => a.sourceRoutineName).filter(Boolean))]
+  if (routineNames.length > 0) {
+    lines.push(`  routines: [${routineNames.map(n => escapeYaml(String(n))).join(', ')}]`)
+  }
   lines.push(`  completion: "${doneCount}/${totalCount}"`)
   lines.push(`  completion_pct: ${pct}`)
 
-  // スタミナ・メンタルログ
+  // 4軸ログ（mental=淀, wave=波, body_temp=体温）
   if (dayState?.staminaLog?.length > 0) {
     lines.push(`  stamina: [${dayState.staminaLog.map((e: any) => e.level).join(', ')}]`)
   }
   if (dayState?.mentalLog?.length > 0) {
     lines.push(`  mental: [${dayState.mentalLog.map((e: any) => e.level).join(', ')}]`)
+  }
+  if (dayState?.waveLog?.length > 0) {
+    lines.push(`  wave: [${dayState.waveLog.map((e: any) => e.level).join(', ')}]`)
+  }
+  if (dayState?.bodyTempLog?.length > 0) {
+    lines.push(`  body_temp: [${dayState.bodyTempLog.map((e: any) => e.level).join(', ')}]`)
   }
 
   // ムード
@@ -312,13 +318,15 @@ function buildWabiYaml(date: string, routines: Routine[], executions: Record<str
     lines.push(`  moods: [${dayState.moodLog.map((e: any) => e.mood).join(', ')}]`)
   }
 
-  // チェックイン
+  // チェックイン（4軸）
   if (dayState?.checkIns?.length > 0) {
     lines.push('  check_ins:')
     for (const ci of dayState.checkIns) {
       lines.push(`    - time: "${ci.time}"`)
       lines.push(`      stamina: ${ci.stamina}`)
       lines.push(`      mental: ${ci.mental}`)
+      if (ci.wave != null) lines.push(`      wave: ${ci.wave}`)
+      if (ci.bodyTemp != null) lines.push(`      body_temp: ${ci.bodyTemp}`)
       if (ci.tags?.length > 0) {
         lines.push(`      tags: [${ci.tags.map((t: string) => escapeYaml(t)).join(', ')}]`)
       }
@@ -328,18 +336,22 @@ function buildWabiYaml(date: string, routines: Routine[], executions: Record<str
     }
   }
 
-  // 各項目の完了状態
-  if (allItems.length > 0) {
+  // 各アクションの完了状態・気持ち・ひとこと
+  if (actions.length > 0) {
     lines.push('  items:')
-    for (const item of allItems) {
-      lines.push(`    - title: ${escapeYaml(item.title)}`)
-      lines.push(`      done: ${!!checkedItems[item.id]}`)
+    for (const a of actions) {
+      lines.push(`    - title: ${escapeYaml(a.title)}`)
+      lines.push(`      done: ${!!checkedItems[a.id]}`)
+      const mood = actionState?.itemMoods?.[a.id]
+      if (mood) lines.push(`      mood: ${mood}`)
+      const comment = actionState?.itemComments?.[a.id]
+      if (comment) lines.push(`      comment: ${escapeYaml(String(comment))}`)
     }
   }
 
   // やらないと決めたこと
-  if (exec?.declined) {
-    lines.push(`  declined: ${escapeYaml(exec.declined)}`)
+  if (actionState?.declined) {
+    lines.push(`  declined: ${escapeYaml(String(actionState.declined))}`)
   }
 
   return lines.join('\n')
@@ -351,11 +363,9 @@ function writeObsidianDailyNote(date: string): { success: boolean; error?: strin
     const vaultPath = settings.obsidianVaultPath
     if (!vaultPath) return { success: false, error: 'Vault未設定' }
 
-    const routines = store.get('routines')
     const executions = store.get('executions')
-    if (!routines.length) return { success: false, error: 'ルーティン未定義' }
 
-    const wabiYaml = buildWabiYaml(date, routines, executions)
+    const wabiYaml = buildWabiYaml(date, executions)
     if (!wabiYaml) return { success: false, error: 'データなし' }
 
     // デイリーノート内容
@@ -438,7 +448,7 @@ function scheduleObsidianExport() {
   if (!settings.obsidianVaultPath) return
   if (obsidianExportTimer) clearTimeout(obsidianExportTimer)
   obsidianExportTimer = setTimeout(() => {
-    writeObsidianDailyNote(todayString())
+    writeObsidianDailyNote(wabiToday())
   }, 3000) // 3秒デバウンス
 }
 
@@ -452,7 +462,7 @@ ipcMain.handle('obsidian:selectVault', async () => {
 })
 
 ipcMain.handle('obsidian:export', () => {
-  return writeObsidianDailyNote(todayString())
+  return writeObsidianDailyNote(wabiToday())
 })
 
 // ── Auto Updater (自動ダウンロード + インストール) ──

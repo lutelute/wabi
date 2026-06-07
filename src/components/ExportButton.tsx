@@ -1,37 +1,27 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useDay } from '../contexts/DayContext'
 import { useActionList } from '../contexts/ActionListContext'
-import { useRoutines } from '../contexts/RoutineContext'
-import { buildDailyNoteMarkdown } from '../utils/dailyNoteExport'
+import { buildDailyNoteMarkdown, type DailyActionSnapshot } from '../utils/dailyNoteExport'
 import { DailyNotePreview } from './DailyNotePreview'
 
 export function ExportButton() {
   const dayState = useDay()
-  const { declined, checkedItems, itemMoods, mentalCompletions } = useActionList()
-  const { selected } = useRoutines()
+  const { actions, declined, checkedItems, itemMoods, itemComments, mentalCompletions } = useActionList()
   const [showPreview, setShowPreview] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const execState = useMemo(() => ({
-    routineId: selected?.id ?? '',
-    date: dayState.date,
+  const snapshot: DailyActionSnapshot = useMemo(() => ({
+    actions,
     checkedItems,
-    itemWeights: {},
-    timerState: null,
-    declined,
-    moodLog: [],
-    moodNote: '',
     itemMoods,
-    staminaLog: [],
-    mentalLog: [],
-    checkIns: [],
+    itemComments,
     mentalCompletions,
-    dismissedConcepts: [],
-  }), [selected, dayState.date, checkedItems, declined, itemMoods, mentalCompletions])
+    declined,
+  }), [actions, checkedItems, itemMoods, itemComments, mentalCompletions, declined])
 
   const markdown = useMemo(() => {
-    return buildDailyNoteMarkdown(dayState, execState, selected ?? null)
-  }, [dayState, execState, selected])
+    return buildDailyNoteMarkdown(dayState, snapshot)
+  }, [dayState, snapshot])
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(markdown).then(() => {

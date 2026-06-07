@@ -1,10 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { storage } from '../storage'
+import { wabiToday } from '../utils/wabiDate'
 import type { Mood, MoodEntry, CheckIn } from '../types/routine'
-
-function todayString(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function nowTime(): string {
   const now = new Date()
@@ -58,7 +55,7 @@ interface DayContextValue {
 const DayContext = createContext<DayContextValue | null>(null)
 
 export function DayProvider({ children }: { children: ReactNode }) {
-  const [date, setDate] = useState(todayString)
+  const [date, setDate] = useState(wabiToday)
   const [staminaLog, setStaminaLog] = useState<LevelEntry[]>([])
   const [mentalLog, setMentalLog] = useState<LevelEntry[]>([])
   const [waveLog, setWaveLog] = useState<LevelEntry[]>([])
@@ -71,35 +68,48 @@ export function DayProvider({ children }: { children: ReactNode }) {
   const [closedAt, setClosedAt] = useState<string | undefined>(undefined)
   const [loaded, setLoaded] = useState(false)
 
-  // 日付チェック + 自動クローズ（朝5時）
+  // 日付切り替え時の前日保存用に最新stateを保持
+  // （setState経由のクローズはバッチングで date が先に変わり、新しい日のキーに保存されてしまう）
+  const stateRef = useRef<DayState | null>(null)
+  useEffect(() => {
+    stateRef.current = loaded ? {
+      date, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog,
+      dailyNotes, customConcepts, checkIns, restTaken,
+      ...(closedAt ? { closedAt } : {}),
+    } : null
+  })
+
+  // 日付チェック: wabiの一日は朝5時で切り替わる
   useEffect(() => {
     function tick() {
-      const now = new Date()
-      const today = todayString()
+      const today = wabiToday()
+      if (today === date) return
 
-      // 朝5時を過ぎて前日分が未クローズならば自動クローズ
-      if (now.getHours() >= 5 && today !== date && !closedAt && loaded) {
-        const hasActivity = checkIns.length > 0 || moodLog.length > 0 ||
-          staminaLog.length > 0 || mentalLog.length > 0
+      // 朝5時を越えた: 前日分に活動があり未クローズなら、直接storageへクローズ保存
+      const prev = stateRef.current
+      if (prev && !prev.closedAt) {
+        const hasActivity = prev.checkIns.length > 0 || prev.moodLog.length > 0 ||
+          prev.staminaLog.length > 0 || prev.mentalLog.length > 0
         if (hasActivity) {
-          setClosedAt(new Date(date + 'T23:59:59').toISOString())
+          storage.saveDayState(`day:${prev.date}`, {
+            ...prev,
+            closedAt: new Date(prev.date + 'T23:59:59').toISOString(),
+          })
         }
       }
 
-      if (today !== date) {
-        setDate(today)
-        setStaminaLog([]); setMentalLog([])
-        setWaveLog([]); setBodyTempLog([])
-        setMoodLog([]); setDailyNotes('')
-        setCustomConcepts([])
-        setCheckIns([]); setRestTaken(false); setClosedAt(undefined)
-        setLoaded(false)
-      }
+      setDate(today)
+      setStaminaLog([]); setMentalLog([])
+      setWaveLog([]); setBodyTempLog([])
+      setMoodLog([]); setDailyNotes('')
+      setCustomConcepts([])
+      setCheckIns([]); setRestTaken(false); setClosedAt(undefined)
+      setLoaded(false)
     }
 
     const interval = setInterval(tick, 30_000)
     return () => clearInterval(interval)
-  }, [date, closedAt, loaded, checkIns.length, moodLog.length, staminaLog.length, mentalLog.length])
+  }, [date])
 
   // ロード
   useEffect(() => {

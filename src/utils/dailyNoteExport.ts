@@ -1,5 +1,5 @@
 import type { DayState } from '../contexts/DayContext'
-import type { ExecutionState, Routine, Mood, DailyNoteMeta } from '../types/routine'
+import type { DailyAction, MentalCompletion, Mood, DailyNoteMeta } from '../types/routine'
 
 const MOOD_LABEL: Record<Mood, string> = {
   heavy: '重い', cloudy: 'もやもや', flat: 'ふつう', calm: '穏やか', light: '軽い',
@@ -17,16 +17,22 @@ function dominantMood(moods: Mood[]): Mood | null {
   return best
 }
 
+/** 今日のアクションリストの実行状況 */
+export interface DailyActionSnapshot {
+  actions: DailyAction[]
+  checkedItems: Record<string, boolean>
+  itemMoods: Record<string, Mood>
+  itemComments: Record<string, string>
+  mentalCompletions: MentalCompletion[]
+  declined: string
+}
+
 export function buildDailyNoteMeta(
   dayState: DayState,
-  execState: ExecutionState | null,
-  routine: Routine | null,
+  snapshot: DailyActionSnapshot,
 ): DailyNoteMeta {
-  const allItems = routine?.phases.flatMap(p => p.items) ?? []
-  const checkedCount = execState
-    ? Object.values(execState.checkedItems).filter(Boolean).length
-    : 0
-  const totalCount = allItems.length
+  const checkedCount = snapshot.actions.filter(a => snapshot.checkedItems[a.id]).length
+  const totalCount = snapshot.actions.length
 
   const allTags = dayState.checkIns.flatMap(ci => ci.tags)
   const uniqueTags = [...new Set(allTags)]
@@ -49,12 +55,18 @@ function yamlArray(arr: (string | number)[]): string {
   return '[' + arr.map(v => typeof v === 'string' ? v : String(v)).join(', ') + ']'
 }
 
-export function metaToYaml(meta: DailyNoteMeta): string {
+export function metaToYaml(meta: DailyNoteMeta, dayState: DayState): string {
   const lines: string[] = []
   lines.push('---')
   lines.push(`date: ${meta.date}`)
   lines.push(`stamina: ${yamlArray(meta.stamina)}`)
   lines.push(`mental: ${yamlArray(meta.mental)}`)
+  if (dayState.waveLog.length > 0) {
+    lines.push(`wave: ${yamlArray(dayState.waveLog.map(e => e.level))}`)
+  }
+  if (dayState.bodyTempLog.length > 0) {
+    lines.push(`body_temp: ${yamlArray(dayState.bodyTempLog.map(e => e.level))}`)
+  }
   lines.push(`mood_flow: ${yamlArray(meta.mood_flow)}`)
   lines.push(`dominant_mood: ${meta.dominant_mood ?? 'null'}`)
   lines.push(`completion: "${meta.completion}"`)
@@ -67,22 +79,21 @@ export function metaToYaml(meta: DailyNoteMeta): string {
 
 export function buildDailyNoteMarkdown(
   dayState: DayState,
-  execState: ExecutionState | null,
-  routine: Routine | null,
+  snapshot: DailyActionSnapshot,
 ): string {
-  const meta = buildDailyNoteMeta(dayState, execState, routine)
+  const meta = buildDailyNoteMeta(dayState, snapshot)
   const sections: string[] = []
 
   // YAML frontmatter
-  sections.push(metaToYaml(meta))
+  sections.push(metaToYaml(meta, dayState))
 
-  // Check-ins
+  // Check-ins（4軸）
   if (dayState.checkIns.length > 0) {
     sections.push('')
     sections.push('## チェックイン')
     for (const ci of dayState.checkIns) {
       const tagStr = ci.tags.length > 0 ? ' ' + ci.tags.map(t => `#${t}`).join(' ') : ''
-      let line = `- ${ci.time} 体力:${ci.stamina} 心:${ci.mental}${tagStr}`
+      let line = `- ${ci.time} 体温:${ci.bodyTemp ?? '-'} 体力:${ci.stamina} 淀:${ci.mental} 波:${ci.wave ?? '-'}${tagStr}`
       if (ci.comment) line += ` ${ci.comment}`
       sections.push(line)
     }
@@ -96,36 +107,44 @@ export function buildDailyNoteMarkdown(
     sections.push(flow)
   }
 
-  // Routine section
-  if (routine && execState) {
+  // 今日のアクション（出どころのルーティンごとにまとめる）
+  if (snapshot.actions.length > 0) {
     sections.push('')
-    sections.push(`## ルーティン: ${routine.name}`)
-    for (const phase of routine.phases) {
-      sections.push(`### ${phase.title}`)
-      for (const item of phase.items) {
-        const checked = execState.checkedItems[item.id]
+    sections.push('## 今日のアクション')
+    const byRoutine = new Map<string, DailyAction[]>()
+    for (const a of snapshot.actions) {
+      const key = a.sourceRoutineName || ''
+      if (!byRoutine.has(key)) byRoutine.set(key, [])
+      byRoutine.get(key)!.push(a)
+    }
+    for (const [routineName, actions] of byRoutine) {
+      if (routineName && byRoutine.size > 1) sections.push(`### ${routineName}`)
+      for (const a of actions) {
+        const checked = snapshot.checkedItems[a.id]
         const mark = checked ? 'x' : ' '
-        const mood = execState.itemMoods[item.id] as Mood | undefined
+        const mood = snapshot.itemMoods[a.id]
         const moodSuffix = mood ? ` (${MOOD_LABEL[mood]})` : ''
-        const mentalTag = item.isMental ? ' @mental' : ''
-        sections.push(`- [${mark}] ${item.title}${mentalTag}${moodSuffix}`)
+        const mentalTag = a.isMental ? ' @mental' : ''
+        sections.push(`- [${mark}] ${a.title}${mentalTag}${moodSuffix}`)
 
-        // Mental completion reflection
-        const mc = execState.mentalCompletions.find(m => m.itemId === item.id)
-        if (mc) {
-          sections.push(`  > ${mc.reflection}`)
-        }
+        // ひとことメモ
+        const comment = snapshot.itemComments[a.id]
+        if (comment) sections.push(`  > ${comment}`)
+
+        // @mental の振り返り
+        const mc = snapshot.mentalCompletions.find(m => m.itemId === a.id)
+        if (mc) sections.push(`  > ${mc.reflection}`)
       }
     }
   }
 
   // Notes section
-  const hasNotes = dayState.dailyNotes || execState?.declined
+  const hasNotes = dayState.dailyNotes || snapshot.declined
   if (hasNotes) {
     sections.push('')
     sections.push('## ノート')
-    if (execState?.declined) {
-      sections.push(`手放したこと: ${execState.declined}`)
+    if (snapshot.declined) {
+      sections.push(`手放したこと: ${snapshot.declined}`)
     }
     if (dayState.dailyNotes) {
       sections.push(dayState.dailyNotes)

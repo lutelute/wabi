@@ -47,6 +47,8 @@ interface DayContextValue {
   setDailyNotes: (note: string) => void
   addCustomConcept: (text: string) => void
   addCheckIn: (stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string, source?: 'manual' | 'dialog') => void
+  updateCheckIn: (index: number, patch: Partial<CheckIn>) => void
+  deleteCheckIn: (index: number) => void
   markRestTaken: () => void
   closeDay: () => void
   reopenDay: () => void
@@ -188,6 +190,39 @@ export function DayProvider({ children }: { children: ReactNode }) {
     setWaveLog(prev => [...prev, { level: wave, time }])
     setBodyTempLog(prev => [...prev, { level: bodyTemp, time }])
   }, [])
+  // チェックインの編集（4軸ログも同じtimeのエントリを同期更新）
+  // 各setterは独立して呼ぶ（updater内でsetterを呼ぶとStrictModeの二重実行で副作用が重複するため）
+  const updateCheckIn = useCallback((index: number, patch: Partial<CheckIn>) => {
+    const target = checkIns[index]
+    if (!target) return
+    const t = target.time
+    const updTo = (level: number) => (log: LevelEntry[]) => {
+      const i = log.findIndex(e => e.time === t)
+      return i >= 0 ? log.map((e, j) => j === i ? { ...e, level } : e) : log
+    }
+    setCheckIns(prev => prev.map((ci, i) => i === index ? { ...ci, ...patch } : ci))
+    if (patch.stamina != null) setStaminaLog(updTo(patch.stamina))
+    if (patch.mental != null) setMentalLog(updTo(patch.mental))
+    if (patch.wave != null) setWaveLog(updTo(patch.wave))
+    if (patch.bodyTemp != null) setBodyTempLog(updTo(patch.bodyTemp))
+  }, [checkIns])
+
+  // チェックインの削除（4軸ログも同じtimeのエントリを1件削除）
+  const deleteCheckIn = useCallback((index: number) => {
+    const target = checkIns[index]
+    if (!target) return
+    const t = target.time
+    const rmByTime = (log: LevelEntry[]) => {
+      const i = log.findIndex(e => e.time === t)
+      return i >= 0 ? log.filter((_, j) => j !== i) : log
+    }
+    setCheckIns(prev => prev.filter((_, i) => i !== index))
+    setStaminaLog(rmByTime)
+    setMentalLog(rmByTime)
+    setWaveLog(rmByTime)
+    setBodyTempLog(rmByTime)
+  }, [checkIns])
+
   const markRestTaken = useCallback(() => setRestTaken(true), [])
   const closeDay = useCallback(() => setClosedAt(new Date().toISOString()), [])
   const reopenDay = useCallback(() => setClosedAt(undefined), [])
@@ -199,7 +234,7 @@ export function DayProvider({ children }: { children: ReactNode }) {
   return (
     <DayContext.Provider value={{
       date, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, customConcepts, checkIns, restTaken, closedAt,
-      addStamina, addMental, addMood, setDailyNotes, addCustomConcept, addCheckIn, markRestTaken, closeDay, reopenDay,
+      addStamina, addMental, addMood, setDailyNotes, addCustomConcept, addCheckIn, updateCheckIn, deleteCheckIn, markRestTaken, closeDay, reopenDay,
     }}>
       {children}
     </DayContext.Provider>

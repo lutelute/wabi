@@ -315,7 +315,7 @@ export function ActionChecklist() {
                             if (e.key === 'Enter' && !e.nativeEvent.isComposing) setCommentingId(null)
                             if (e.key === 'Escape') setCommentingId(null)
                           }}
-                          placeholder="ひとこと"
+                          placeholder="このタスクのメモ"
                           className="w-full text-[10px] bg-transparent border-b border-wabi-accent/40 text-wabi-text-muted placeholder:text-wabi-text-muted/30 focus:outline-none py-0.5"
                         />
                       </div>
@@ -331,7 +331,7 @@ export function ActionChecklist() {
                         className="px-8 pb-0.5 opacity-0 group-hover/action:opacity-100 transition-opacity cursor-text"
                         onClick={() => setCommentingId(action.id)}
                       >
-                        <span className="text-[10px] text-wabi-text-muted/20">+ ひとこと</span>
+                        <span className="text-[10px] text-wabi-text-muted/20">+ メモ</span>
                       </div>
                     )}
                   </div>

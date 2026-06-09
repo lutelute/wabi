@@ -62,7 +62,7 @@ function buildCheckInText(checkIns: CheckIn[], moodLog: MoodEntry[], dailyNotes:
 interface LevelEntry { level: number; time: string }
 
 export function CheckInSubmit() {
-  const { date, checkIns, addCheckIn, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, addMood, restTaken } = useDay()
+  const { date, checkIns, addCheckIn, updateCheckIn, deleteCheckIn, staminaLog, mentalLog, waveLog, bodyTempLog, moodLog, dailyNotes, addMood, restTaken } = useDay()
   const { settings, updateSetting } = useSettings()
   const customFeelingTags = settings.customFeelingTags ?? []
   const [comment, setComment] = useState('')
@@ -73,6 +73,7 @@ export function CheckInSubmit() {
   const [newTagInput, setNewTagInput] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const staminaBarRef = useRef<HTMLDivElement>(null)
   const mentalBarRef = useRef<HTMLDivElement>(null)
   const waveBarRef = useRef<HTMLDivElement>(null)
@@ -144,12 +145,37 @@ export function CheckInSubmit() {
   }, [])
 
   const handleSubmit = useCallback(() => {
-    addCheckIn(stamina, mental, wave, bodyTemp, tags, comment)
+    if (editingIndex != null) {
+      updateCheckIn(editingIndex, { stamina, mental, wave, bodyTemp, tags, comment })
+      setEditingIndex(null)
+    } else {
+      addCheckIn(stamina, mental, wave, bodyTemp, tags, comment)
+    }
     setTags([])
     setComment('')
     setSubmitted(true)
     setTimeout(() => setSubmitted(false), 1500)
-  }, [stamina, mental, wave, bodyTemp, tags, comment, addCheckIn])
+  }, [stamina, mental, wave, bodyTemp, tags, comment, addCheckIn, updateCheckIn, editingIndex])
+
+  // 履歴の項目を編集モードにロード
+  const startEdit = useCallback((i: number) => {
+    const ci = checkIns[i]
+    if (!ci) return
+    setEditingIndex(i)
+    setStaminaRaw(ci.stamina)
+    setMental(ci.mental)
+    setWave(ci.wave ?? 30)
+    setBodyTemp(ci.bodyTemp ?? 50)
+    setTags(ci.tags ?? [])
+    setComment(ci.comment ?? '')
+    setResting(true) // 編集中は体力キャップを外す
+  }, [checkIns])
+
+  const cancelEdit = useCallback(() => {
+    setEditingIndex(null)
+    setTags([])
+    setComment('')
+  }, [])
 
   const handleCopy = useCallback(() => {
     const text = buildCheckInText(checkIns, moodLog, dailyNotes, date)
@@ -161,7 +187,10 @@ export function CheckInSubmit() {
 
   return (
     <div className="px-1">
-      <p className="text-xs text-wabi-text-muted mb-3">寂び</p>
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="text-xs text-wabi-text-muted">寂び</p>
+        <p className="text-[9px] text-wabi-text-muted/40">いまの状態を記録</p>
+      </div>
 
       <div className="bg-wabi-surface rounded-lg border border-wabi-border/50 p-4 space-y-4 text-xs">
         {/* 体(左) + 心(右) 2カラム縦並び */}
@@ -341,17 +370,29 @@ export function CheckInSubmit() {
           className="w-full bg-wabi-bg border border-wabi-border/50 rounded-md px-3 py-2 text-xs text-wabi-text placeholder:text-wabi-text-muted/40 focus:outline-none focus:border-wabi-text/20 resize-y min-h-[2.5rem]"
         />
 
-        {/* 記録ボタン */}
-        <button
-          onClick={handleSubmit}
-          className={`w-full py-2.5 rounded-md text-xs font-medium transition-all duration-200 ${
-            submitted
-              ? 'bg-emerald-600/20 text-emerald-600'
-              : 'bg-wabi-text/5 hover:bg-wabi-text/10 text-wabi-text'
-          }`}
-        >
-          {submitted ? '記録しました' : '記録する'}
-        </button>
+        {/* 記録ボタン（編集中は更新） */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleSubmit}
+            className={`flex-1 py-2.5 rounded-md text-xs font-medium transition-all duration-200 ${
+              submitted
+                ? 'bg-emerald-600/20 text-emerald-600'
+                : editingIndex != null
+                  ? 'bg-wabi-accent/20 hover:bg-wabi-accent/30 text-wabi-text'
+                  : 'bg-wabi-text/5 hover:bg-wabi-text/10 text-wabi-text'
+            }`}
+          >
+            {submitted ? (editingIndex != null ? '更新しました' : '記録しました') : (editingIndex != null ? '更新する' : '記録する')}
+          </button>
+          {editingIndex != null && (
+            <button
+              onClick={cancelEdit}
+              className="px-3 py-2.5 rounded-md text-xs text-wabi-text-muted hover:bg-wabi-bg transition-colors"
+            >
+              やめる
+            </button>
+          )}
+        </div>
 
         {/* 時系列グラフ */}
         {(mentalLog.length >= 2 || waveLog.length >= 2 || bodyTempLog.length >= 2 || staminaLog.length >= 2) && (
@@ -396,13 +437,29 @@ export function CheckInSubmit() {
           <div className="pt-2 border-t border-wabi-border/30 space-y-2">
             <p className="text-[10px] text-wabi-text-muted/50">今日の寂び ({checkIns.length})</p>
             {checkIns.map((ci, i) => (
-              <div key={i} className="bg-wabi-bg rounded-md px-3 py-2 space-y-1">
+              <div key={i} className={`group bg-wabi-bg rounded-md px-3 py-2 space-y-1 ${editingIndex === i ? 'ring-1 ring-wabi-accent/40' : ''}`}>
                 <div className="flex items-center gap-2 text-[10px] text-wabi-text-muted flex-wrap">
                   <span className="font-mono opacity-50">{ci.time}</span>
                   <span style={{ color: '#c4786a' }}>体温 {ci.bodyTemp ?? '-'}</span>
                   <span style={{ color: '#8aaa7a' }}>体力 {ci.stamina}</span>
                   <span style={{ color: '#8a9298' }}>淀 {ci.mental}</span>
                   <span style={{ color: '#5a8a9a' }}>波 {ci.wave ?? '-'}</span>
+                  <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => startEdit(i)}
+                      className="text-wabi-text-muted/50 hover:text-wabi-text cursor-pointer"
+                      title="この記録を編集"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2l4 4-10 10H4v-4z"/></svg>
+                    </button>
+                    <button
+                      onClick={() => { if (editingIndex === i) cancelEdit(); deleteCheckIn(i) }}
+                      className="text-wabi-text-muted/50 hover:text-wabi-timer cursor-pointer"
+                      title="この記録を削除"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11"/></svg>
+                    </button>
+                  </span>
                 </div>
                 {ci.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">

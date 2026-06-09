@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import Store from 'electron-store'
 import { autoUpdater } from 'electron-updater'
 import { wabiToday } from '../src/utils/wabiDate'
+import { startLocalApi, type LocalApiHandle } from './localApi'
 import type { Routine, ExecutionState, BackupData } from '../src/types/routine'
 
 interface StoreSchema {
@@ -101,6 +102,9 @@ function createWindow() {
       contextIsolation: true,
     },
   })
+
+  // リロード/遷移時、応答待ちのexternalリクエストを解放
+  mainWindow.webContents.on('did-start-navigation', () => rejectAllPending('window navigated'))
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL
   mainWindow.setTitle(devServerUrl ? '侘び [DEV]' : '侘び')
@@ -501,16 +505,71 @@ ipcMain.on('updater:install', () => {
   autoUpdater.quitAndInstall()
 })
 
+// ── Local API（対話レイヤーの受け口）──
+let localApi: LocalApiHandle | null = null
+
+// main→renderer のリクエストID往復管理
+const pendingExternal = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
+
+function callRenderer(action: string, payload: unknown, timeoutMs = 8000): Promise<unknown> {
+  if (!mainWindow || mainWindow.webContents.isLoading()) {
+    return Promise.reject(new Error('window not ready'))
+  }
+  const id = crypto.randomUUID()
+  return new Promise((resolve, reject) => {
+    pendingExternal.set(id, { resolve, reject })
+    mainWindow!.webContents.send('external:request', { id, action, payload })
+    setTimeout(() => {
+      if (pendingExternal.has(id)) {
+        pendingExternal.delete(id)
+        reject(new Error('renderer response timeout'))
+      }
+    }, timeoutMs)
+  })
+}
+
+ipcMain.on('external:response', (_e, resp: { id: string; ok: boolean; data?: unknown; error?: string }) => {
+  const p = pendingExternal.get(resp.id)
+  if (!p) return
+  pendingExternal.delete(resp.id)
+  if (resp.ok) p.resolve(resp.data)
+  else p.reject(new Error(resp.error || 'renderer error'))
+})
+
+// ウィンドウのリロード/遷移で応答待ちを即解放（8秒timeoutを待たずに失敗させる）
+function rejectAllPending(reason: string) {
+  for (const [, p] of pendingExternal) p.reject(new Error(reason))
+  pendingExternal.clear()
+}
+
+async function setupLocalApi() {
+  try {
+    localApi = await startLocalApi(app.getPath('userData'), {
+      handle: callRenderer,
+      isReady: () => !!mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading(),
+      appVersion: app.getVersion(),
+    })
+    console.log(`[wabi] local API on 127.0.0.1:${localApi.port}`)
+  } catch (e) {
+    console.error('[wabi] local API failed to start:', e)
+  }
+}
+
 app.whenReady().then(() => {
   restoreFromBackupIfNeeded()
   buildMenu()
   createWindow()
+  setupLocalApi()
 
   // パッケージ済みアプリでのみ自動アップデートチェック
   if (app.isPackaged) {
     setupAutoUpdater()
     autoUpdater.checkForUpdates()
   }
+})
+
+app.on('will-quit', () => {
+  localApi?.close()
 })
 
 app.on('window-all-closed', () => {

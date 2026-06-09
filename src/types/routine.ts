@@ -69,6 +69,7 @@ export interface CheckIn {
   bodyTemp: number          // 0-100 (体温: 冷0↔100熱)
   tags: string[]            // 気持ちタグ
   comment: string           // 自由コメント
+  source?: 'manual' | 'dialog'  // 記録の出どころ（対話経由か手入力か）
 }
 
 export interface MentalCompletion {
@@ -228,6 +229,23 @@ export interface ElectronAPI {
   onNewVersion?: (callback: (version: string) => void) => () => void
   onDownloadProgress?: (callback: (percent: number) => void) => () => void
   onUpdateReady?: (callback: (version: string) => void) => () => void
+  // External dialog bridge (Local API → renderer)
+  onExternalRequest?: (callback: (req: ExternalRequest) => void) => () => void
+  sendExternalResponse?: (resp: ExternalResponse) => void
+}
+
+// 対話レイヤー（Local API）からの受け口
+export interface ExternalRequest {
+  id: string
+  action: 'today' | 'recent' | 'checkin' | 'mood' | 'note' | 'declined' | 'action-check'
+  payload: any
+}
+
+export interface ExternalResponse {
+  id: string
+  ok: boolean
+  data?: unknown
+  error?: string
 }
 
 declare global {

@@ -54,4 +54,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('updater:ready', handler)
     return () => ipcRenderer.removeListener('updater:ready', handler)
   },
+
+  // External dialog bridge (Local API → renderer → 正規Context)
+  onExternalRequest: (callback: (req: unknown) => void) => {
+    const handler = (_event: unknown, req: unknown) => callback(req)
+    ipcRenderer.on('external:request', handler)
+    return () => ipcRenderer.removeListener('external:request', handler)
+  },
+  sendExternalResponse: (resp: unknown) => ipcRenderer.send('external:response', resp),
 })

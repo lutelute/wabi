@@ -1,0 +1,10 @@
+{
+  "name": "wabi-mcp",
+  "version": "1.0.0",
+  "description": "wabi 対話レイヤーの MCP サーバー（依存ゼロ・stdio）",
+  "type": "module",
+  "bin": {
+    "wabi-mcp": "index.mjs"
+  },
+  "private": true
+}

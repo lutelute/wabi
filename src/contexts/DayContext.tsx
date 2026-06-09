@@ -46,7 +46,7 @@ interface DayContextValue {
   addMood: (mood: Mood) => void
   setDailyNotes: (note: string) => void
   addCustomConcept: (text: string) => void
-  addCheckIn: (stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string) => void
+  addCheckIn: (stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string, source?: 'manual' | 'dialog') => void
   markRestTaken: () => void
   closeDay: () => void
   reopenDay: () => void
@@ -180,9 +180,9 @@ export function DayProvider({ children }: { children: ReactNode }) {
   const addMood = useCallback((mood: Mood) => {
     setMoodLog(prev => [...prev, { mood, time: nowTime() }])
   }, [])
-  const addCheckIn = useCallback((stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string) => {
+  const addCheckIn = useCallback((stamina: number, mental: number, wave: number, bodyTemp: number, tags: string[], comment: string, source: 'manual' | 'dialog' = 'manual') => {
     const time = nowTime()
-    setCheckIns(prev => [...prev, { time, stamina, mental, wave, bodyTemp, tags, comment }])
+    setCheckIns(prev => [...prev, { time, stamina, mental, wave, bodyTemp, tags, comment, source }])
     setStaminaLog(prev => [...prev, { level: stamina, time }])
     setMentalLog(prev => [...prev, { level: mental, time }])
     setWaveLog(prev => [...prev, { level: wave, time }])

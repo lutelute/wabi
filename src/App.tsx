@@ -18,6 +18,7 @@ import { ExportButton } from './components/ExportButton'
 import { Settings } from './components/Settings'
 import { AuthGate } from './components/AuthGate'
 import { WeeklyReview } from './components/WeeklyReview'
+import { ExternalBridge } from './components/ExternalBridge'
 import { storage } from './storage'
 
 export type AppMode = 'edit' | 'execute'
@@ -36,12 +37,14 @@ export default function App() {
   }, [])
 
   return (
-    <AuthGate>
     <DayProvider>
       <RoutineProvider>
         <ActionListProvider>
           <SettingsProvider>
             <ReminderProvider>
+              {/* 対話レイヤーは認証UIと独立にマウント（AuthGateのloadingでブロックされない） */}
+              <ExternalBridge />
+              <AuthGate>
               <div className="flex h-full">
                 {/* Titlebar drag region (Electron only) */}
                 {isElectron && (
@@ -142,11 +145,11 @@ export default function App() {
 
               {showSettings && <Settings onClose={() => setShowSettings(false)} />}
               {showWeekly && <WeeklyReview onClose={() => setShowWeekly(false)} />}
+              </AuthGate>
             </ReminderProvider>
           </SettingsProvider>
         </ActionListProvider>
       </RoutineProvider>
     </DayProvider>
-    </AuthGate>
   )
 }
